@@ -1,0 +1,8 @@
+/target
+
+.vscode
+
+config*.toml
+!config.sample.toml
+
+database*.db*
