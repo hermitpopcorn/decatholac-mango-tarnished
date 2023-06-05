@@ -7,7 +7,7 @@ mod structs;
 mod utils;
 
 fn main() -> Result<()> {
-    let config = get_config(Some("config.toml"))?;
+    let config = get_config(Some("settings.toml"))?;
     let targets = get_targets(config.get("targets"))?;
     println!("{:#?}", targets.len());
     println!("{:#?}", targets);

@@ -2,7 +2,7 @@
 
 .vscode
 
-config*.toml
-!config.sample.toml
+settings*.toml
+!settings.sample.toml
 
 database*.db*

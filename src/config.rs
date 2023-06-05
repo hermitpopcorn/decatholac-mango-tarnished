@@ -7,7 +7,7 @@ use toml::{map::Map, Value as TomlValue};
 use crate::structs::{JsonDateTimeFormat, ParseMode, Target, TargetKeys, TargetTags};
 
 pub fn get_config(filename: Option<&str>) -> Result<TomlValue> {
-    let filename = filename.unwrap_or("config.toml");
+    let filename = filename.unwrap_or("settings.toml");
 
     let mut exe_path = env::current_exe()?;
     exe_path.pop();
