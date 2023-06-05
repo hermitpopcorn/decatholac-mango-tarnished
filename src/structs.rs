@@ -35,7 +35,7 @@ pub struct Target {
     pub ascending_source: bool, // Whether the source lists item A->Z instead of Z->A like normal
     pub mode: ParseMode,
     pub base_url: Option<String>,
-    pub request_headers: HashMap<String, String>,
+    pub request_headers: Option<HashMap<String, String>>,
     // JSON mode
     pub keys: Option<TargetKeys>,
     // HTML mode

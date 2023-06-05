@@ -72,13 +72,12 @@ pub fn get_targets(config: Option<&TomlValue>) -> Result<Vec<Target>> {
                 Some(value) => Some(value.as_str().unwrap().to_owned()),
                 None => None,
             },
-            request_headers: convert_toml_map_to_string_hashmap(
-                config_target
-                    .get("requestHeaders")
-                    .unwrap_or(&TomlValue::Table(Map::new()))
-                    .as_table()
-                    .unwrap(),
-            ),
+            request_headers: match config_target.get("requestHeaders") {
+                Some(table) => Some(convert_toml_map_to_string_hashmap(
+                    table.as_table().unwrap(),
+                )),
+                None => None,
+            },
             keys: parse_keys(config_target.get("keys"))?,
             tags: parse_tags(config_target.get("tags"))?,
         })
