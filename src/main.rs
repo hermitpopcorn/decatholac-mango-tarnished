@@ -4,6 +4,7 @@ use config::{get_config, get_targets};
 mod config;
 mod parsers;
 mod structs;
+mod utils;
 
 fn main() -> Result<()> {
     let config = get_config(Some("config.toml"))?;
