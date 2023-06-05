@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use chrono::prelude::*;
 use serde_json::Value;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Server {
     pub identifier: String,
     pub feed_channel_identifier: String,
@@ -11,7 +11,7 @@ pub struct Server {
     pub is_announcing: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Chapter {
     pub manga: String,
     pub number: String,
@@ -21,14 +21,14 @@ pub struct Chapter {
     pub logged_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ParseMode {
     Rss,
     Json,
     Html,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Target {
     pub name: String,
     pub source: String,
@@ -42,14 +42,14 @@ pub struct Target {
     pub tags: Option<TargetTags>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum JsonDateTimeFormat {
     Unix,
     Rfc2822,
     Rfc3339,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TargetKeys {
     pub chapters: String,
     pub number: String,
@@ -60,7 +60,7 @@ pub struct TargetKeys {
     pub skip: HashMap<String, Value>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TargetTags {
     pub chapters_tag: String,
     pub number_tag: Option<String>,
