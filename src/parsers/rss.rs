@@ -38,8 +38,6 @@ pub fn parse_rss(target: &Target, source: &str) -> Vec<Chapter> {
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashMap;
-
     use chrono::DateTime;
 
     use crate::structs::{ParseMode, Target};
