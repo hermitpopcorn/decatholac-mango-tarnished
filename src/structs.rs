@@ -44,7 +44,9 @@ pub struct Target {
 
 #[derive(Debug, Clone)]
 pub enum JsonDateTimeFormat {
-    Unix,
+    UnixSec,
+    UnixMilli,
+    UnixNano,
     Rfc2822,
     Rfc3339,
 }

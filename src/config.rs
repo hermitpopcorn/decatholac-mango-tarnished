@@ -100,7 +100,9 @@ fn parse_keys(toml_keys: Option<&TomlValue>) -> Result<Option<TargetKeys>> {
         date: convert_value_to_string(config_keys, "date")?,
         date_format: match convert_value_to_string(config_keys, "dateFormat") {
             Ok(the_string) => match the_string.as_str() {
-                "unix" => Some(JsonDateTimeFormat::Unix),
+                "unixsec" => Some(JsonDateTimeFormat::UnixSec),
+                "unix" | "unixmilli" => Some(JsonDateTimeFormat::UnixMilli),
+                "unixnano" => Some(JsonDateTimeFormat::UnixNano),
                 "rfc2822" => Some(JsonDateTimeFormat::Rfc2822),
                 "rfc3339" => Some(JsonDateTimeFormat::Rfc3339),
                 _ => None,
