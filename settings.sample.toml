@@ -11,7 +11,7 @@ baseUrl = "https://mangacross.jp"
 [targets.keys]
 chapters = "comic.episodes"
 number = "volume"
-title = "volume+title"
+title = ["volume", "title"]
 date = "publish_start"
 url = "page_url"
 
@@ -33,7 +33,7 @@ Referer = "https://comic.pixiv.net/works/8789"
 [targets.keys]
 chapters = "data.episodes"
 number = "episode.numbering_title"
-title = "episode.numbering_title+episode.sub_title"
+title = ["episode.numbering_title", "episode.sub_title"]
 date = "episode.read_start_at"
 dateFormat = "unix"
 url = "episode.viewer_path"

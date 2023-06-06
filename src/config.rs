@@ -95,8 +95,8 @@ fn parse_keys(toml_keys: Option<&TomlValue>) -> Result<Option<TargetKeys>> {
 
     Ok(Some(TargetKeys {
         chapters: convert_value_to_string(config_keys, "chapters")?,
-        number: convert_value_to_string(config_keys, "number")?,
-        title: convert_value_to_string(config_keys, "title")?,
+        number: convert_value_to_array_of_string(config_keys, "number")?,
+        title: convert_value_to_array_of_string(config_keys, "title")?,
         date: convert_value_to_string(config_keys, "date")?,
         date_format: match convert_value_to_string(config_keys, "dateFormat") {
             Ok(the_string) => match the_string.as_str() {
@@ -142,6 +142,24 @@ fn convert_value_to_string(value: &TomlValue, name: &str) -> Result<String> {
         .to_owned();
 
     Ok(result)
+}
+
+fn convert_value_to_array_of_string(value: &TomlValue, name: &str) -> Result<Vec<String>> {
+    let value = value
+        .get(name)
+        .ok_or(anyhow!("No {} in target keys.", name))?;
+
+    let mut vector = vec![];
+    if value.is_array() {
+        let values = value.as_array().unwrap();
+        for v in values {
+            vector.push(v.as_str().unwrap().to_owned());
+        }
+    } else {
+        vector.push(value.as_str().unwrap().to_owned());
+    }
+
+    Ok(vector)
 }
 
 fn convert_toml_map_to_string_hashmap(

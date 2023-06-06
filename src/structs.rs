@@ -52,8 +52,8 @@ pub enum JsonDateTimeFormat {
 #[derive(Debug, Clone)]
 pub struct TargetKeys {
     pub chapters: String,
-    pub number: String,
-    pub title: String,
+    pub number: Vec<String>,
+    pub title: Vec<String>,
     pub date: String,
     pub date_format: Option<JsonDateTimeFormat>,
     pub url: String,
