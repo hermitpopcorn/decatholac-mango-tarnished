@@ -1,3 +1,4 @@
+use anyhow::Result;
 use chrono::Utc;
 use feed_rs::{model::Link, parser};
 
@@ -9,7 +10,7 @@ fn get_link_href(links: &[Link]) -> String {
     links.first().unwrap().href.to_owned()
 }
 
-pub fn parse_rss(target: &Target, source: &str) -> Vec<Chapter> {
+pub fn parse_rss(target: &Target, source: &str) -> Result<Vec<Chapter>> {
     let feed = parser::parse(source.as_bytes()).unwrap();
 
     let mut chapters: Vec<Chapter> = vec![];
@@ -33,7 +34,7 @@ pub fn parse_rss(target: &Target, source: &str) -> Vec<Chapter> {
         chapters.reverse();
     }
 
-    chapters
+    Ok(chapters)
 }
 
 #[cfg(test)]
@@ -84,7 +85,7 @@ mod test {
             </channel>
         </rss>
 "###;
-        let chapters = parse_rss(&target, source);
+        let chapters = parse_rss(&target, source).unwrap();
 
         // Should have 2 chapters
         assert!(chapters.len() == 2);
