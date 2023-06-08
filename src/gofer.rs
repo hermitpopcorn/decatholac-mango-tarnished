@@ -7,7 +7,7 @@ use tokio::{sync::Mutex, task::spawn};
 use crate::{
     database::database::Database,
     log,
-    parsers::{json::parse_json, rss::parse_rss},
+    parsers::{html::parse_html, json::parse_json, rss::parse_rss},
     structs::{Chapter, ParseMode, Target},
 };
 
@@ -75,7 +75,7 @@ async fn fetch_chapters(target: &Target) -> Result<Vec<Chapter>> {
     let chapters = match target.mode {
         ParseMode::Rss => parse_rss(&target, &body)?,
         ParseMode::Json => parse_json(&target, &body)?,
-        ParseMode::Html => vec![], // TODO
+        ParseMode::Html => parse_html(target, &body)?,
     };
 
     Ok(chapters)
