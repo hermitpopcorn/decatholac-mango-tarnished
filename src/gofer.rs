@@ -73,8 +73,8 @@ async fn fetch_chapters(target: &Target) -> Result<Vec<Chapter>> {
     let body = fetch_body(&target.source, &target.request_headers).await?;
 
     let chapters = match target.mode {
-        ParseMode::Rss => parse_rss(&target, &body)?,
-        ParseMode::Json => parse_json(&target, &body)?,
+        ParseMode::Rss => parse_rss(target, &body)?,
+        ParseMode::Json => parse_json(target, &body)?,
         ParseMode::Html => parse_html(target, &body)?,
     };
 

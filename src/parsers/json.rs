@@ -172,8 +172,7 @@ mod test {
                     }
                 ]
             }
-        }          
-"###;
+        }"###;
         let chapters = parse_json(&target, source).unwrap();
 
         // Should have 2 chapters

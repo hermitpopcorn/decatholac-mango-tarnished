@@ -83,8 +83,7 @@ mod test {
                     <author>Noowee</author>
                 </item>
             </channel>
-        </rss>
-"###;
+        </rss>"###;
         let chapters = parse_rss(&target, source).unwrap();
 
         // Should have 2 chapters
