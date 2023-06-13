@@ -1,6 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
+use crossbeam::channel::Sender;
 use reqwest::Client;
 use tokio::{sync::Mutex, task::spawn};
 
@@ -9,12 +10,16 @@ use crate::{
     log,
     parsers::{html::parse_html, json::parse_json, rss::parse_rss},
     structs::{Chapter, ParseMode, Target},
+    CoreMessage,
 };
 
 pub async fn dispatch_gofers(
     database: Arc<Mutex<dyn Database>>,
+    sender: Sender<CoreMessage>,
     targets: Vec<Target>,
 ) -> Result<()> {
+    log!("Dispatching Gofers...");
+
     let mut handles = Vec::with_capacity(targets.len());
 
     for target in targets {
@@ -26,6 +31,9 @@ pub async fn dispatch_gofers(
     for handle in handles {
         let _ = handle.await?;
     }
+
+    log!("All Gofers have returned.");
+    let _ = sender.send(CoreMessage::GoferFinished)?;
     Ok(())
 }
 
