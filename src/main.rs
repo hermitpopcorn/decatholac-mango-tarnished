@@ -4,11 +4,13 @@ use anyhow::Result;
 use config::{get_config, get_targets};
 use crossbeam::channel::{Receiver, Sender};
 use database::sqlite::SqliteDatabase;
+use discord::{connect_discord, get_discord_token};
 use gofer::dispatch_gofers;
 use tokio::{spawn, sync::Mutex, task::JoinHandle};
 
 mod config;
 mod database;
+mod discord;
 mod gofer;
 mod parsers;
 mod structs;
@@ -17,11 +19,13 @@ mod utils;
 pub enum CoreMessage {
     StartGofer,
     GoferFinished,
+    StartDiscordBot,
 }
 
 #[derive(PartialEq)]
 enum Worker {
     Gofer,
+    DiscordBot,
 }
 
 #[tokio::main]
@@ -29,6 +33,7 @@ async fn main() -> Result<()> {
     // Get config values
     let config = get_config(Some("settings.toml"))?;
     let targets = get_targets(config.get("targets"))?;
+    let token = get_discord_token(config.get("token"))?;
 
     // Setup database
     let database = SqliteDatabase::new("database.db");
@@ -47,6 +52,7 @@ async fn main() -> Result<()> {
     loop {
         if boot {
             let _ = sender.send(CoreMessage::StartGofer)?;
+            let _ = sender.send(CoreMessage::StartDiscordBot)?;
             boot = false;
         }
 
@@ -70,6 +76,19 @@ async fn main() -> Result<()> {
                     if index.is_some() {
                         log!("Removed Gofer from handlers");
                         handlers.remove(index.unwrap());
+                    }
+                }
+                CoreMessage::StartDiscordBot => {
+                    if get_worker_index(&handlers, Worker::DiscordBot).is_none() {
+                        log!("Pushed DiscordBot into handlers");
+                        handlers.push((
+                            Worker::DiscordBot,
+                            spawn(connect_discord(
+                                database_arc.clone(),
+                                sender.clone(),
+                                token.clone(),
+                            )),
+                        ));
                     }
                 }
             }
