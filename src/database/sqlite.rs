@@ -2,7 +2,12 @@ use anyhow::Result;
 use chrono::Utc;
 use rusqlite::{Connection, OptionalExtension};
 
-use crate::{log, structs::Chapter};
+use rusqlite::{params, Connection, OptionalExtension};
+
+use crate::{
+    log,
+    structs::{Chapter, Server},
+};
 
 use super::database::Database;
 
@@ -92,15 +97,11 @@ impl Database for SqliteDatabase {
     fn save_chapters(&self, chapters: &[Chapter]) -> Result<()> {
         for chapter in chapters {
             let mut statement = self.connection.prepare(
-                "SELECT id FROM Chapters WHERE manga = :manga AND title = :title AND number = :number",
+                "SELECT id FROM Chapters WHERE manga = ?1 AND title = ?2 AND number = ?3",
             )?;
             let check = statement
                 .query_row(
-                    &[
-                        (":manga", &chapter.manga),
-                        (":title", &chapter.title),
-                        (":number", &chapter.number),
-                    ],
+                    params![&chapter.manga, &chapter.title, &chapter.number],
                     |_row| Ok(()),
                 )
                 .optional()?;
@@ -120,13 +121,13 @@ impl Database for SqliteDatabase {
                 VALUES
                 (:manga, :title, :number, :url, :date, :logged_at)",
             )?;
-            statement.execute(&[
-                (":manga", &chapter.manga),
-                (":title", &chapter.title),
-                (":number", &chapter.number),
-                (":url", &chapter.url),
-                (":date", &chapter.date.to_string()),
-                (":logged_at", &Utc::now().to_string()),
+            statement.execute(params![
+                &chapter.manga,
+                &chapter.title,
+                &chapter.number,
+                &chapter.url,
+                &chapter.date,
+                Utc::now(),
             ])?;
         }
 
