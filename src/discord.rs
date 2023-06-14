@@ -40,7 +40,11 @@ pub async fn connect_discord(
 
     let framework: FrameworkBuilder<Data, PoiseError> = Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![trigger_start_gofer(), set_as_feed_channel()],
+            commands: vec![
+                trigger_start_gofer(),
+                trigger_start_announcer(),
+                set_as_feed_channel(),
+            ],
             ..Default::default()
         })
         .token(token)
@@ -75,6 +79,14 @@ async fn trigger_start_gofer(ctx: Context<'_>) -> Result<(), PoiseError> {
     Ok(())
 }
 
+/// Print all unannounced feed items.
+#[poise::command(slash_command, ephemeral, rename = "announce")]
+async fn trigger_start_announcer(ctx: Context<'_>) -> Result<(), PoiseError> {
+    let _ = ctx.data().sender.send(CoreMessage::StartAnnouncer)?;
+    ctx.say("Announcement process triggered.").await?;
+    Ok(())
+}
+
 /// Set current channel as the feed channel. You must have channel management permissions to do this.
 #[poise::command(
     slash_command,
@@ -100,6 +112,10 @@ async fn set_as_feed_channel(ctx: Context<'_>) -> Result<(), PoiseError> {
     ctx.say("This channel has been set as the feed channel.")
         .await?;
     Ok(())
+}
+
+pub fn get_channel_id(channel_id: &str) -> Result<ChannelId> {
+    Ok(ChannelId(channel_id.parse()?))
 }
 
 pub async fn send_chapters(http: &Http, channel: ChannelId, chapters: Vec<Chapter>) -> Result<()> {
