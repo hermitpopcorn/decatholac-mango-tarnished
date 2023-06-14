@@ -18,7 +18,7 @@ pub async fn dispatch_gofers(
     sender: Sender<CoreMessage>,
     targets: Vec<Target>,
 ) -> Result<()> {
-    log!("Dispatching Gofers...");
+    log!("[GOFR] Dispatching Gofers...");
 
     let mut handles = Vec::with_capacity(targets.len());
 
@@ -32,13 +32,13 @@ pub async fn dispatch_gofers(
         let _ = handle.await?;
     }
 
-    log!("All Gofers have returned.");
+    log!("[GOFR] All Gofers have returned.");
     let _ = sender.send(CoreMessage::GoferFinished)?;
     Ok(())
 }
 
 pub async fn run_gofer(database: Arc<Mutex<dyn Database>>, target: Target) -> Result<()> {
-    log!("Gofer started for {}...", target.name,);
+    log!("[GOFR] Gofer started for {}...", target.name,);
     let mut chapters: Option<Vec<Chapter>> = None;
 
     let mut attempts = 5;
@@ -52,7 +52,7 @@ pub async fn run_gofer(database: Arc<Mutex<dyn Database>>, target: Target) -> Re
     }
 
     if attempts == 0 {
-        log!("{}: Failed all fetching attempts.", target.name);
+        log!("[GOFR] {}: Failed all fetching attempts.", target.name);
     }
 
     if chapters.is_some() {
@@ -68,11 +68,11 @@ pub async fn run_gofer(database: Arc<Mutex<dyn Database>>, target: Target) -> Re
         }
 
         if attempts == 0 {
-            log!("{}: Failed saving chapters.", target.name);
+            log!("[GOFR] {}: Failed saving chapters.", target.name);
         }
     }
 
-    log!("{}: Gofer finished.", target.name);
+    log!("[GOFR] {}: Gofer finished.", target.name);
 
     Ok(())
 }

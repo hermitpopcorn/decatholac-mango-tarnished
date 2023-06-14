@@ -36,7 +36,7 @@ impl Database for SqliteDatabase {
         let check = statement.query_row([], |_row| Ok(())).optional()?;
 
         if check.is_none() {
-            log!("Initializing Chapters table...");
+            log!("[DATA] Initializing Chapters table...");
             self.connection.execute(
                 "CREATE TABLE 'Chapters' (
                     'id'       INTEGER,
@@ -58,7 +58,7 @@ impl Database for SqliteDatabase {
         let check = statement.query_row([], |_row| Ok(())).optional()?;
 
         if check.is_none() {
-            log!("Initializing Servers table...");
+            log!("[DATA] Initializing Servers table...");
             self.connection.execute(
                 "CREATE TABLE 'Servers' (
                     'id'              INTEGER,
@@ -78,7 +78,7 @@ impl Database for SqliteDatabase {
         let check = statement.query_row([], |_row| Ok(())).optional()?;
 
         if check.is_none() {
-            log!("Initializing Subscriptions table...");
+            log!("[DATA] Initializing Subscriptions table...");
             self.connection.execute(
                 "CREATE TABLE 'Subscriptions' (
                     'id'      INTEGER,
@@ -111,7 +111,7 @@ impl Database for SqliteDatabase {
             }
 
             log!(
-                "Saving new chapter... [{}]: {}",
+                "[DATA] Saving new chapter... [{}]: {}",
                 &chapter.manga,
                 &chapter.title
             );
@@ -191,6 +191,11 @@ impl Database for SqliteDatabase {
     }
 
     fn set_feed_channel(&self, guild_id: &str, channel_id: &str) -> Result<()> {
+        log!(
+            "[DATA] Setting new feed channel for Server {}...",
+            &guild_id
+        );
+
         let currently_set_channel_id = self.get_feed_channel(guild_id);
 
         if currently_set_channel_id

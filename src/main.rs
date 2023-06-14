@@ -84,13 +84,13 @@ async fn main() -> Result<()> {
                                 targets.clone(),
                             )),
                         ));
-                        log!("Tracking Gofer handle.");
+                        log!("[CORE] Tracking Gofer handle.");
                     }
                 }
                 CoreMessage::GoferFinished => {
                     let index = get_worker_index(&handles, Worker::Gofer);
                     if index.is_some() {
-                        log!("Removed Gofer handle.");
+                        log!("[CORE] Removed Gofer handle.");
                         handles.remove(index.unwrap());
                     }
 
@@ -107,7 +107,7 @@ async fn main() -> Result<()> {
                 }
                 CoreMessage::StartAnnouncer => {
                     if discord_http.is_none() {
-                        log!("Could not start Announcer because Discord API has not been received by core control.");
+                        log!("[CORE] Could not start Announcer because Discord API has not been received by core control.");
                         continue;
                     }
 
@@ -123,18 +123,18 @@ async fn main() -> Result<()> {
                             sender.clone(),
                         )),
                     ));
-                    log!("Tracking Announcer handle.");
+                    log!("[CORE] Tracking Announcer handle.");
                 }
                 CoreMessage::AnnouncerFinished => {
                     let index = get_worker_index(&handles, Worker::Announcer);
                     if index.is_some() {
-                        log!("Removed Announcer handle.");
+                        log!("[CORE] Removed Announcer handle.");
                         handles.remove(index.unwrap());
                     }
                 }
                 CoreMessage::StartDiscordBot => {
                     if get_worker_index(&handles, Worker::DiscordBot).is_none() {
-                        log!("Tracking DiscordBot handle.");
+                        log!("[CORE] Tracking DiscordBot handle.");
                         handles.push((
                             Worker::DiscordBot,
                             spawn(connect_discord(
@@ -147,7 +147,7 @@ async fn main() -> Result<()> {
                 }
                 CoreMessage::TransferDiscordHttp(http) => {
                     discord_http = Some(http);
-                    log!("Discord API received.");
+                    log!("[CORE] Discord API received.");
                 }
                 CoreMessage::Quit => {
                     break;

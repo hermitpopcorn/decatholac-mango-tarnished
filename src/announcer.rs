@@ -19,7 +19,7 @@ pub async fn dispatch_announcer(
     discord_http: Arc<Http>,
     sender: Sender<CoreMessage>,
 ) -> Result<()> {
-    log!("Dispatching Announcer...");
+    log!("[ANNO] Dispatching Announcer...");
 
     let servers = database.lock().await.get_servers()?;
 
@@ -36,7 +36,7 @@ pub async fn dispatch_announcer(
         let _ = handle.await?;
     }
 
-    log!("Announcer has finished.");
+    log!("[ANNO] Announcer has finished.");
     let _ = sender.send(CoreMessage::AnnouncerFinished)?;
     Ok(())
 }
@@ -56,7 +56,7 @@ async fn announce_for_server(
     let chapters = db_access.get_unnanounced_chapters(&server.identifier)?;
     if chapters.len() > 0 {
         log!(
-            "Announcing {} chapters for Server {}...",
+            "[ANNO] Announcing {} chapters for Server {}...",
             chapters.len(),
             &server.identifier
         );
@@ -65,7 +65,7 @@ async fn announce_for_server(
         send_chapters(discord_http.as_ref(), channel, chapters).await?;
         db_access.set_last_announced_time(&server.identifier, &Utc::now())?;
     } else {
-        log!("No new chapters for Server {}.", &server.identifier);
+        log!("[ANNO] No new chapters for Server {}.", &server.identifier);
     }
 
     db_access.set_announcing_server_flag(&server.identifier, false)?;

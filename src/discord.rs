@@ -36,7 +36,7 @@ pub async fn connect_discord(
     sender: Sender<CoreMessage>,
     token: String,
 ) -> Result<()> {
-    log!("Connecting to Discord...");
+    log!("[DSCD] Connecting to Discord...");
 
     let framework: FrameworkBuilder<Data, PoiseError> = Framework::builder()
         .options(poise::FrameworkOptions {
@@ -52,10 +52,10 @@ pub async fn connect_discord(
         .setup(move |ctx, _ready, framework| {
             Box::pin(async move {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                log!("Connected to Discord.");
+                log!("[DSCD] Connected to Discord.");
 
                 // Send Discord API back to core control
-                log!("Sending Discord API back to core control...");
+                log!("[DSCD] Sending Discord API back to core control...");
                 let discord_http = ctx.http.clone();
                 sender.send(CoreMessage::TransferDiscordHttp(discord_http))?;
 
