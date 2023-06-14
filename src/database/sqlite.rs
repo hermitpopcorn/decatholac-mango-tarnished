@@ -200,13 +200,20 @@ impl Database for SqliteDatabase {
             return Ok(());
         }
 
-        let mut statement = self.connection.prepare(match currently_set_channel_id {
-            Ok(_) => "UPDATE Servers SET channelId = ?1 WHERE guildId = ?2",
-            Err(_) => {
-                "INSERT INTO Servers (guildId, channelId, lastAnnouncedAt) VALUES (?2, ?1, ?3)"
+        match currently_set_channel_id {
+            Ok(_) => {
+                let mut statement = self
+                    .connection
+                    .prepare("UPDATE Servers SET channelId = ?2 WHERE guildId = ?1")?;
+                statement.execute(params![guild_id, channel_id])?;
             }
-        })?;
-        statement.execute(params![guild_id, channel_id, Utc::now()])?;
+            Err(_) => {
+                let mut statement = self.connection.prepare(
+                    "INSERT INTO Servers (guildId, channelId, lastAnnouncedAt) VALUES (?1, ?2, ?3)",
+                )?;
+                statement.execute(params![guild_id, channel_id, Utc::now()])?;
+            }
+        }
 
         Ok(())
     }
@@ -268,7 +275,7 @@ impl Database for SqliteDatabase {
             Ok(row_channel_id)
         });
 
-        let is_announcing = match check {
+        match check {
             Ok(is_announcing) => return Ok(is_announcing),
             Err(_) => bail!("Feed channel has not been set for this server."),
         };
