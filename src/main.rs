@@ -60,7 +60,6 @@ async fn main() -> Result<()> {
             match message {
                 CoreMessage::StartGofer => {
                     if get_worker_index(&handlers, Worker::Gofer).is_none() {
-                        log!("Pushed Gofer into handlers");
                         handlers.push((
                             Worker::Gofer,
                             spawn(dispatch_gofers(
@@ -69,6 +68,7 @@ async fn main() -> Result<()> {
                                 targets.clone(),
                             )),
                         ));
+                        log!("Pushed Gofer into handlers.");
                     }
                 }
                 CoreMessage::GoferFinished => {
@@ -80,7 +80,7 @@ async fn main() -> Result<()> {
                 }
                 CoreMessage::StartDiscordBot => {
                     if get_worker_index(&handlers, Worker::DiscordBot).is_none() {
-                        log!("Pushed DiscordBot into handlers");
+                        log!("Pushed DiscordBot into handlers.");
                         handlers.push((
                             Worker::DiscordBot,
                             spawn(connect_discord(

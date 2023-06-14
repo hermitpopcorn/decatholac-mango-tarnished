@@ -38,7 +38,7 @@ pub async fn dispatch_gofers(
 }
 
 pub async fn run_gofer(database: Arc<Mutex<dyn Database>>, target: Target) -> Result<()> {
-    log!("Gofer started for {}", target.name,);
+    log!("Gofer started for {}...", target.name,);
     let mut chapters: Option<Vec<Chapter>> = None;
 
     let mut attempts = 5;
