@@ -29,7 +29,7 @@ pub async fn dispatch_gofers(
     }
 
     for handle in handles {
-        let _ = handle.await?;
+        let _ = handle.await;
     }
 
     log!("[GOFR] All Gofers have returned.");
