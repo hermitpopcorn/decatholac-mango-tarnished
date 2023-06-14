@@ -430,6 +430,7 @@ dependencies = [
  "rusqlite",
  "scraper",
  "serde_json",
+ "serenity",
  "tokio",
  "toml",
  "url",
