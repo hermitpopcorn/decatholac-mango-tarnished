@@ -8,6 +8,7 @@ use discord::{connect_discord, get_discord_token};
 use gofer::dispatch_gofers;
 use tokio::{spawn, sync::Mutex, task::JoinHandle};
 
+mod announcer;
 mod config;
 mod database;
 mod discord;
