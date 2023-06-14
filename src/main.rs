@@ -8,7 +8,12 @@ use database::sqlite::SqliteDatabase;
 use discord::{connect_discord, get_discord_token};
 use gofer::dispatch_gofers;
 use poise::serenity_prelude::Http;
-use tokio::{spawn, sync::Mutex, task::JoinHandle};
+use tokio::{
+    spawn,
+    sync::Mutex,
+    task::JoinHandle,
+    time::{sleep, Duration},
+};
 
 mod announcer;
 mod config;
@@ -26,6 +31,7 @@ pub enum CoreMessage {
     AnnouncerFinished,
     StartDiscordBot,
     TransferDiscordHttp(Arc<Http>),
+    Quit,
 }
 
 #[derive(PartialEq)]
@@ -88,9 +94,16 @@ async fn main() -> Result<()> {
                         handles.remove(index.unwrap());
                     }
 
-                    if discord_http.is_some() {
-                        sender.send(CoreMessage::StartAnnouncer)?;
-                    }
+                    // Spawn another thread to wait a little and trigger announcer
+                    let cloned_discord_http = discord_http.clone();
+                    let cloned_sender = sender.clone();
+                    spawn(async move {
+                        sleep(Duration::from_millis(2500)).await;
+
+                        if cloned_discord_http.is_some() {
+                            cloned_sender.send(CoreMessage::StartAnnouncer).unwrap();
+                        }
+                    });
                 }
                 CoreMessage::StartAnnouncer => {
                     if discord_http.is_none() {
@@ -103,7 +116,7 @@ async fn main() -> Result<()> {
                     }
 
                     handles.push((
-                        Worker::Gofer,
+                        Worker::Announcer,
                         spawn(dispatch_announcer(
                             database_arc.clone(),
                             discord_http.clone().unwrap(),
@@ -113,7 +126,11 @@ async fn main() -> Result<()> {
                     log!("Tracking Announcer handle.");
                 }
                 CoreMessage::AnnouncerFinished => {
-                    todo!()
+                    let index = get_worker_index(&handles, Worker::Announcer);
+                    if index.is_some() {
+                        log!("Removed Announcer handle.");
+                        handles.remove(index.unwrap());
+                    }
                 }
                 CoreMessage::StartDiscordBot => {
                     if get_worker_index(&handles, Worker::DiscordBot).is_none() {
@@ -131,6 +148,9 @@ async fn main() -> Result<()> {
                 CoreMessage::TransferDiscordHttp(http) => {
                     discord_http = Some(http);
                     log!("Discord API received.");
+                }
+                CoreMessage::Quit => {
+                    break;
                 }
             }
         }
