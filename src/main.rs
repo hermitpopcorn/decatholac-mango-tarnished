@@ -51,7 +51,7 @@ async fn main() -> Result<()> {
         crossbeam::channel::unbounded();
 
     // Setup vector of processes to keep track what is running
-    let mut handlers: Vec<(Worker, JoinHandle<Result<()>>)> = vec![];
+    let mut handles: Vec<(Worker, JoinHandle<Result<()>>)> = vec![];
 
     // Setup memory storage for Discord API
     let mut discord_http: Option<Arc<Http>> = None;
@@ -69,8 +69,8 @@ async fn main() -> Result<()> {
         if let Ok(message) = receiver.recv() {
             match message {
                 CoreMessage::StartGofer => {
-                    if get_worker_index(&handlers, Worker::Gofer).is_none() {
-                        handlers.push((
+                    if get_worker_index(&handles, Worker::Gofer).is_none() {
+                        handles.push((
                             Worker::Gofer,
                             spawn(dispatch_gofers(
                                 database_arc.clone(),
@@ -78,14 +78,14 @@ async fn main() -> Result<()> {
                                 targets.clone(),
                             )),
                         ));
-                        log!("Pushed Gofer into handlers.");
+                        log!("Tracking Gofer handle.");
                     }
                 }
                 CoreMessage::GoferFinished => {
-                    let index = get_worker_index(&handlers, Worker::Gofer);
+                    let index = get_worker_index(&handles, Worker::Gofer);
                     if index.is_some() {
-                        log!("Removed Gofer from handlers.");
-                        handlers.remove(index.unwrap());
+                        log!("Removed Gofer handle.");
+                        handles.remove(index.unwrap());
                     }
 
                     if discord_http.is_some() {
@@ -98,11 +98,11 @@ async fn main() -> Result<()> {
                         continue;
                     }
 
-                    if get_worker_index(&handlers, Worker::Announcer).is_some() {
+                    if get_worker_index(&handles, Worker::Announcer).is_some() {
                         continue;
                     }
 
-                    handlers.push((
+                    handles.push((
                         Worker::Gofer,
                         spawn(dispatch_announcer(
                             database_arc.clone(),
@@ -110,15 +110,15 @@ async fn main() -> Result<()> {
                             sender.clone(),
                         )),
                     ));
-                    log!("Pushed Announcer into handlers.");
+                    log!("Tracking Announcer handle.");
                 }
                 CoreMessage::AnnouncerFinished => {
                     todo!()
                 }
                 CoreMessage::StartDiscordBot => {
-                    if get_worker_index(&handlers, Worker::DiscordBot).is_none() {
-                        log!("Pushed DiscordBot into handlers.");
-                        handlers.push((
+                    if get_worker_index(&handles, Worker::DiscordBot).is_none() {
+                        log!("Tracking DiscordBot handle.");
+                        handles.push((
                             Worker::DiscordBot,
                             spawn(connect_discord(
                                 database_arc.clone(),
@@ -140,11 +140,11 @@ async fn main() -> Result<()> {
 }
 
 fn get_worker_index(
-    handlers: &Vec<(Worker, JoinHandle<Result<()>>)>,
+    handles: &Vec<(Worker, JoinHandle<Result<()>>)>,
     what: Worker,
 ) -> Option<usize> {
-    for (index, handler) in handlers.iter().enumerate() {
-        if handler.0 == what {
+    for (index, handle) in handles.iter().enumerate() {
+        if handle.0 == what {
             return Some(index);
         }
     }
