@@ -6,3 +6,5 @@ settings*.toml
 !settings.sample.toml
 
 database*.db*
+
+decatholac-mango-tarnished*
