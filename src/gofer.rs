@@ -47,7 +47,10 @@ pub async fn run_gofer(database: Arc<Mutex<dyn Database>>, target: Target) -> Re
         if fetch.is_ok() {
             chapters = Some(fetch.unwrap());
             break;
+        } else {
+            log!("[GOFR] Gofer for {} encountered an error: {}", target.name, fetch.unwrap_err());
         }
+
         attempts -= 1;
     }
 
