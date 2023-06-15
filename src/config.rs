@@ -171,7 +171,7 @@ fn parse_tags(toml_tags: Option<&TomlValue>) -> Result<Option<TargetTags>> {
         title_attribute: disallow_empty(convert_value_to_string(config_tags, "titleAttribute")),
         date_tag: disallow_empty(convert_value_to_string(config_tags, "dateTag")),
         date_attribute: disallow_empty(convert_value_to_string(config_tags, "dateAttribute")),
-        date_format: disallow_empty(convert_value_to_string(config_tags, "date_format")),
+        date_format: disallow_empty(convert_value_to_string(config_tags, "dateFormat")),
         url_tag: disallow_empty(convert_value_to_string(config_tags, "urlTag")),
         url_attribute: disallow_empty(convert_value_to_string(config_tags, "urlAttribute")),
     }))
