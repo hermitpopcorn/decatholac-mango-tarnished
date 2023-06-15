@@ -1,4 +1,5 @@
 token = "" # Discord bot token
+cron = "0 0 12 * * *"
 
 [[targets]]
 name = "Bokuyaba"

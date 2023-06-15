@@ -3,6 +3,7 @@ use std::sync::Arc;
 use announcer::dispatch_announcer;
 use anyhow::Result;
 use config::{get_config, get_targets};
+use crony::{Job, Runner, Schedule};
 use crossbeam::channel::{Receiver, Sender};
 use database::sqlite::SqliteDatabase;
 use discord::{connect_discord, get_discord_token};
@@ -14,6 +15,7 @@ use tokio::{
     task::JoinHandle,
     time::{sleep, Duration},
 };
+use toml::Value;
 
 mod announcer;
 mod config;
@@ -41,12 +43,41 @@ enum Worker {
     DiscordBot,
 }
 
+struct WorkerCron {
+    schedule: Option<String>,
+    sender: Sender<CoreMessage>,
+}
+
+impl Job for WorkerCron {
+    fn schedule(&self) -> Schedule {
+        if self.schedule.as_ref().is_none() {
+            return "0 0 12 * * *".parse().unwrap();
+        }
+
+        let schedule: Schedule = match self.schedule.as_ref().unwrap().parse() {
+            Ok(s) => s,
+            Err(_) => "0 0 12 * * *".parse().unwrap(),
+        };
+
+        schedule
+    }
+    fn handle(&self) {
+        log!("[CORE] WorkerCron handler triggered.");
+
+        match self.sender.send(CoreMessage::StartGofer) {
+            Ok(_) => (),
+            Err(_) => log!("[CORE] Something went wrong with WorkerCron."),
+        };
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Get config values
     let config = get_config(Some("settings.toml"))?;
-    let targets = get_targets(config.get("targets"))?;
+    let targets: Vec<structs::Target> = get_targets(config.get("targets"))?;
     let token = get_discord_token(config.get("token"))?;
+    let cron_schedule = get_cron_schedule(config.get("cron"))?;
 
     // Setup database
     let database = SqliteDatabase::new("database.db");
@@ -61,6 +92,14 @@ async fn main() -> Result<()> {
 
     // Setup memory storage for Discord API
     let mut discord_http: Option<Arc<Http>> = None;
+
+    // Run cron runner
+    let mut runner = Runner::new();
+    runner = runner.add(Box::new(WorkerCron {
+        schedule: cron_schedule,
+        sender: sender.clone(),
+    }));
+    runner = runner.run();
 
     // One-shot toggle
     let mut boot = true;
@@ -156,6 +195,7 @@ async fn main() -> Result<()> {
         }
     }
 
+    runner.stop();
     Ok(())
 }
 
@@ -170,4 +210,19 @@ fn get_worker_index(
     }
 
     None
+}
+
+fn get_cron_schedule(schedule: Option<&Value>) -> Result<Option<String>> {
+    if schedule.is_none() {
+        return Ok(None);
+    }
+
+    let schedule = match schedule.unwrap().as_str() {
+        Some(schedule) => schedule.to_owned(),
+        None => {
+            return Ok(None);
+        }
+    };
+
+    Ok(Some(schedule))
 }
