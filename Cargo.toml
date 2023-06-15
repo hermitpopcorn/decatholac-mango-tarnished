@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.71"
 chrono = "0.4.26"
+colored = "2.0.0"
 crony = "0.3.0"
 crossbeam = { version = "0.8.2", features = ["crossbeam-channel"] }
 feed-rs = "1.3"

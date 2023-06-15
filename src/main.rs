@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use announcer::dispatch_announcer;
 use anyhow::Result;
+use colored::Colorize;
 use config::{get_config, get_cron_schedule, get_discord_token, get_targets};
 use crony::{Job, Runner, Schedule};
 use crossbeam::channel::{Receiver, Sender};
@@ -61,11 +62,11 @@ impl Job for WorkerCron {
         schedule
     }
     fn handle(&self) {
-        log!("[CORE] WorkerCron handler triggered.");
+        log!("{} WorkerCron handler triggered.", "[CORE]".blue());
 
         match self.sender.send(CoreMessage::StartGofer) {
             Ok(_) => (),
-            Err(_) => log!("[CORE] Something went wrong with WorkerCron."),
+            Err(_) => log!("{} Something went wrong with WorkerCron.", "[CORE]".blue()),
         };
     }
 }
@@ -122,13 +123,13 @@ async fn main() -> Result<()> {
                                 targets.clone(),
                             )),
                         ));
-                        log!("[CORE] Tracking Gofer handle.");
+                        log!("{} Tracking Gofer handle.", "[CORE]".blue());
                     }
                 }
                 CoreMessage::GoferFinished => {
                     let index = get_worker_index(&handles, Worker::Gofer);
                     if index.is_some() {
-                        log!("[CORE] Removed Gofer handle.");
+                        log!("{} Removed Gofer handle.", "[CORE]".blue());
                         handles.remove(index.unwrap());
                     }
 
@@ -145,7 +146,7 @@ async fn main() -> Result<()> {
                 }
                 CoreMessage::StartAnnouncer => {
                     if discord_http.is_none() {
-                        log!("[CORE] Could not start Announcer because Discord API has not been received by core control.");
+                        log!("{} Could not start Announcer because Discord API has not been received by core control.", "[CORE]".blue());
                         continue;
                     }
 
@@ -161,18 +162,18 @@ async fn main() -> Result<()> {
                             sender.clone(),
                         )),
                     ));
-                    log!("[CORE] Tracking Announcer handle.");
+                    log!("{} Tracking Announcer handle.", "[CORE]".blue());
                 }
                 CoreMessage::AnnouncerFinished => {
                     let index = get_worker_index(&handles, Worker::Announcer);
                     if index.is_some() {
-                        log!("[CORE] Removed Announcer handle.");
+                        log!("{} Removed Announcer handle.", "[CORE]".blue());
                         handles.remove(index.unwrap());
                     }
                 }
                 CoreMessage::StartDiscordBot => {
                     if get_worker_index(&handles, Worker::DiscordBot).is_none() {
-                        log!("[CORE] Tracking DiscordBot handle.");
+                        log!("{} Tracking DiscordBot handle.", "[CORE]".blue());
                         handles.push((
                             Worker::DiscordBot,
                             spawn(connect_discord(
@@ -185,7 +186,7 @@ async fn main() -> Result<()> {
                 }
                 CoreMessage::TransferDiscordHttp(http) => {
                     discord_http = Some(http);
-                    log!("[CORE] Discord API received.");
+                    log!("{} Discord API received.", "[CORE]".blue());
                 }
                 CoreMessage::Quit => {
                     break;

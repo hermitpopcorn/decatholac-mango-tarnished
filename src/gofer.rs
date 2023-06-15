@@ -1,6 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
+use colored::Colorize;
 use crossbeam::channel::Sender;
 use reqwest::Client;
 use tokio::{sync::Mutex, task::spawn};
@@ -18,7 +19,7 @@ pub async fn dispatch_gofers(
     sender: Sender<CoreMessage>,
     targets: Vec<Target>,
 ) -> Result<()> {
-    log!("[GOFR] Dispatching Gofers...");
+    log!("{} Dispatching Gofers...", "[GOFR]".green());
 
     let mut handles = Vec::with_capacity(targets.len());
 
@@ -32,13 +33,13 @@ pub async fn dispatch_gofers(
         let _ = handle.await;
     }
 
-    log!("[GOFR] All Gofers have returned.");
+    log!("{} All Gofers have returned.", "[GOFR]".green());
     let _ = sender.send(CoreMessage::GoferFinished)?;
     Ok(())
 }
 
 pub async fn run_gofer(database: Arc<Mutex<dyn Database>>, target: Target) -> Result<()> {
-    log!("[GOFR] Gofer started for {}...", target.name,);
+    log!("{} Gofer started for {}...", "[GOFR]".green(), target.name);
     let mut chapters: Option<Vec<Chapter>> = None;
 
     let mut attempts = 5;
@@ -48,14 +49,23 @@ pub async fn run_gofer(database: Arc<Mutex<dyn Database>>, target: Target) -> Re
             chapters = Some(fetch.unwrap());
             break;
         } else {
-            log!("[GOFR] Gofer for {} encountered an error: {}", target.name, fetch.unwrap_err());
+            log!(
+                "{} Gofer for {} encountered an error: {}",
+                "[GOFR]".green(),
+                target.name,
+                fetch.unwrap_err()
+            );
         }
 
         attempts -= 1;
     }
 
     if attempts == 0 {
-        log!("[GOFR] {}: Failed all fetching attempts.", target.name);
+        log!(
+            "{} {}: Failed all fetching attempts.",
+            "[GOFR]".green(),
+            target.name,
+        );
     }
 
     if chapters.is_some() {
@@ -71,11 +81,15 @@ pub async fn run_gofer(database: Arc<Mutex<dyn Database>>, target: Target) -> Re
         }
 
         if attempts == 0 {
-            log!("[GOFR] {}: Failed saving chapters.", target.name);
+            log!(
+                "{} {}: Failed saving chapters.",
+                "[GOFR]".green(),
+                target.name,
+            );
         }
     }
 
-    log!("[GOFR] {}: Gofer finished.", target.name);
+    log!("{} {}: Gofer finished.", "[GOFR]".green(), target.name);
 
     Ok(())
 }

@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use chrono::Utc;
+use colored::Colorize;
 use crossbeam::channel::Sender;
 use serenity::http::Http;
 use tokio::{spawn, sync::Mutex};
@@ -19,7 +20,7 @@ pub async fn dispatch_announcer(
     discord_http: Arc<Http>,
     sender: Sender<CoreMessage>,
 ) -> Result<()> {
-    log!("[ANNO] Dispatching Announcer...");
+    log!("{} Dispatching Announcer...", "[ANNO]".red());
 
     let servers = database.lock().await.get_servers()?;
 
@@ -36,7 +37,7 @@ pub async fn dispatch_announcer(
         let _ = handle.await?;
     }
 
-    log!("[ANNO] Announcer has finished.");
+    log!("{} Announcer has finished.", "[ANNO]".red());
     let _ = sender.send(CoreMessage::AnnouncerFinished)?;
     Ok(())
 }
@@ -56,7 +57,8 @@ async fn announce_for_server(
     let chapters = db_access.get_unnanounced_chapters(&server.identifier)?;
     if chapters.len() > 0 {
         log!(
-            "[ANNO] Announcing {} chapters for Server {}...",
+            "{} Announcing {} chapters for Server {}...",
+            "[ANNO]".red(),
             chapters.len(),
             &server.identifier
         );
@@ -65,7 +67,11 @@ async fn announce_for_server(
         send_chapters(discord_http.as_ref(), channel, chapters).await?;
         db_access.set_last_announced_time(&server.identifier, &Utc::now())?;
     } else {
-        log!("[ANNO] No new chapters for Server {}.", &server.identifier);
+        log!(
+            "{} No new chapters for Server {}.",
+            "[ANNO]".red(),
+            &server.identifier,
+        );
     }
 
     db_access.set_announcing_server_flag(&server.identifier, false)?;

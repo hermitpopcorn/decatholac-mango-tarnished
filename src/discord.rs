@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use colored::Colorize;
 use crossbeam::channel::Sender;
 use poise::{
     serenity_prelude::{self as serenity, ChannelId, Http},
@@ -21,7 +22,7 @@ pub async fn connect_discord(
     sender: Sender<CoreMessage>,
     token: String,
 ) -> Result<()> {
-    log!("[DSCD] Connecting to Discord...");
+    log!("{} Connecting to Discord...", "[DSCD]".magenta());
 
     let framework: FrameworkBuilder<Data, PoiseError> = Framework::builder()
         .options(poise::FrameworkOptions {
@@ -37,10 +38,13 @@ pub async fn connect_discord(
         .setup(move |ctx, _ready, framework| {
             Box::pin(async move {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                log!("[DSCD] Connected to Discord.");
+                log!("{} Connected to Discord.", "[DSCD]".magenta());
 
                 // Send Discord API back to core control
-                log!("[DSCD] Sending Discord API back to core control...");
+                log!(
+                    "{} Sending Discord API back to core control...",
+                    "[DSCD]".magenta()
+                );
                 let discord_http = ctx.http.clone();
                 sender.send(CoreMessage::TransferDiscordHttp(discord_http))?;
 

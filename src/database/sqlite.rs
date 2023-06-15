@@ -2,6 +2,7 @@ use std::vec;
 
 use anyhow::{bail, Result};
 use chrono::{DateTime, Utc};
+use colored::Colorize;
 use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::{
@@ -36,7 +37,7 @@ impl Database for SqliteDatabase {
         let check = statement.query_row([], |_row| Ok(())).optional()?;
 
         if check.is_none() {
-            log!("[DATA] Initializing Chapters table...");
+            log!("{} Initializing Chapters table...", "[DATA]".yellow());
             self.connection.execute(
                 "CREATE TABLE 'Chapters' (
                     'id'       INTEGER,
@@ -58,7 +59,7 @@ impl Database for SqliteDatabase {
         let check = statement.query_row([], |_row| Ok(())).optional()?;
 
         if check.is_none() {
-            log!("[DATA] Initializing Servers table...");
+            log!("{} Initializing Servers table...", "[DATA]".yellow());
             self.connection.execute(
                 "CREATE TABLE 'Servers' (
                     'id'              INTEGER,
@@ -78,7 +79,7 @@ impl Database for SqliteDatabase {
         let check = statement.query_row([], |_row| Ok(())).optional()?;
 
         if check.is_none() {
-            log!("[DATA] Initializing Subscriptions table...");
+            log!("{} Initializing Subscriptions table...", "[DATA]".yellow());
             self.connection.execute(
                 "CREATE TABLE 'Subscriptions' (
                     'id'      INTEGER,
@@ -111,7 +112,8 @@ impl Database for SqliteDatabase {
             }
 
             log!(
-                "[DATA] Saving new chapter... [{}]: {}",
+                "{} Saving new chapter... [{}]: {}",
+                "[DATA]".yellow(),
                 &chapter.manga,
                 &chapter.title
             );
@@ -192,7 +194,8 @@ impl Database for SqliteDatabase {
 
     fn set_feed_channel(&self, guild_id: &str, channel_id: &str) -> Result<()> {
         log!(
-            "[DATA] Setting new feed channel for Server {}...",
+            "{} Setting new feed channel for Server {}...",
+            "[DATA]".yellow(),
             &guild_id
         );
 
