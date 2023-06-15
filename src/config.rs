@@ -121,17 +121,30 @@ fn parse_tags(toml_tags: Option<&TomlValue>) -> Result<Option<TargetTags>> {
 
     let config_tags = toml_tags.unwrap();
 
+    let disallow_empty = |converted_string: Result<String>| -> Option<String> {
+        if converted_string.is_err() {
+            return None;
+        }
+
+        let converted_string = converted_string.unwrap();
+        if converted_string.len() < 1 {
+            return None;
+        }
+
+        Some(converted_string)
+    };
+
     Ok(Some(TargetTags {
         chapters_tag: convert_value_to_string(config_tags, "chaptersTag")?,
-        number_tag: convert_value_to_string(config_tags, "numberTag").ok(),
-        number_attribute: convert_value_to_string(config_tags, "numberAttribute").ok(),
-        title_tag: convert_value_to_string(config_tags, "titleTag").ok(),
-        title_attribute: convert_value_to_string(config_tags, "titleAttribute").ok(),
-        date_tag: convert_value_to_string(config_tags, "dateTag").ok(),
-        date_attribute: convert_value_to_string(config_tags, "dateAttribute").ok(),
-        date_format: convert_value_to_string(config_tags, "date_format").ok(),
-        url_tag: convert_value_to_string(config_tags, "urlTag").ok(),
-        url_attribute: convert_value_to_string(config_tags, "urlAttribute").ok(),
+        number_tag: disallow_empty(convert_value_to_string(config_tags, "numberTag")),
+        number_attribute: disallow_empty(convert_value_to_string(config_tags, "numberAttribute")),
+        title_tag: disallow_empty(convert_value_to_string(config_tags, "titleTag")),
+        title_attribute: disallow_empty(convert_value_to_string(config_tags, "titleAttribute")),
+        date_tag: disallow_empty(convert_value_to_string(config_tags, "dateTag")),
+        date_attribute: disallow_empty(convert_value_to_string(config_tags, "dateAttribute")),
+        date_format: disallow_empty(convert_value_to_string(config_tags, "date_format")),
+        url_tag: disallow_empty(convert_value_to_string(config_tags, "urlTag")),
+        url_attribute: disallow_empty(convert_value_to_string(config_tags, "urlAttribute")),
     }))
 }
 
@@ -155,10 +168,16 @@ fn convert_value_to_array_of_string(value: &TomlValue, name: &str) -> Result<Vec
     if value.is_array() {
         let values = value.as_array().unwrap();
         for v in values {
-            vector.push(v.as_str().unwrap().to_owned());
+            let converted_string = v.as_str().unwrap().to_owned();
+            if converted_string.len() > 0 {
+                vector.push(converted_string);
+            }
         }
     } else {
-        vector.push(value.as_str().unwrap().to_owned());
+        let converted_string = value.as_str().unwrap().to_owned();
+        if converted_string.len() > 0 {
+            vector.push(converted_string);
+        }
     }
 
     Ok(vector)

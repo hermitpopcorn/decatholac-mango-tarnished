@@ -61,7 +61,10 @@ pub fn parse_json(target: &Target, source: &str) -> Result<Vec<Chapter>> {
             let mut vec = vec![];
             for key in keys {
                 let the_string: Option<Value> = chapter_json.dot_get(key)?;
-                vec.push(the_string.unwrap().as_str().unwrap().to_owned());
+                let the_string = the_string.unwrap().as_str().unwrap().to_owned();
+                if the_string.len() > 0 {
+                    vec.push(the_string);
+                }
             }
             Ok(vec.join(" "))
         };
