@@ -37,6 +37,35 @@ pub fn get_config(filename: Option<&str>) -> Result<TomlValue> {
     Ok(config)
 }
 
+pub fn get_discord_token(token: Option<&TomlValue>) -> Result<String> {
+    if token.is_none() {
+        bail!("Discord token not found.")
+    }
+
+    let token = token
+        .unwrap()
+        .as_str()
+        .ok_or(anyhow!("Discord token is not a string."))?;
+
+    let token = token.to_owned();
+    Ok(token)
+}
+
+pub fn get_cron_schedule(schedule: Option<&TomlValue>) -> Result<Option<String>> {
+    if schedule.is_none() {
+        return Ok(None);
+    }
+
+    let schedule = match schedule.unwrap().as_str() {
+        Some(schedule) => schedule.to_owned(),
+        None => {
+            return Ok(None);
+        }
+    };
+
+    Ok(Some(schedule))
+}
+
 pub fn get_targets(config: Option<&TomlValue>) -> Result<Vec<Target>> {
     if config.is_none() {
         bail!("No targets found.")

@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use announcer::dispatch_announcer;
 use anyhow::Result;
-use config::{get_config, get_targets};
+use config::{get_config, get_cron_schedule, get_discord_token, get_targets};
 use crony::{Job, Runner, Schedule};
 use crossbeam::channel::{Receiver, Sender};
 use database::sqlite::SqliteDatabase;
-use discord::{connect_discord, get_discord_token};
+use discord::connect_discord;
 use gofer::dispatch_gofers;
 use poise::serenity_prelude::Http;
 use tokio::{
@@ -15,7 +15,6 @@ use tokio::{
     task::JoinHandle,
     time::{sleep, Duration},
 };
-use toml::Value;
 
 mod announcer;
 mod config;
@@ -210,19 +209,4 @@ fn get_worker_index(
     }
 
     None
-}
-
-fn get_cron_schedule(schedule: Option<&Value>) -> Result<Option<String>> {
-    if schedule.is_none() {
-        return Ok(None);
-    }
-
-    let schedule = match schedule.unwrap().as_str() {
-        Some(schedule) => schedule.to_owned(),
-        None => {
-            return Ok(None);
-        }
-    };
-
-    Ok(Some(schedule))
 }

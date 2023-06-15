@@ -1,13 +1,12 @@
 use std::sync::Arc;
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::Result;
 use crossbeam::channel::Sender;
 use poise::{
     serenity_prelude::{self as serenity, ChannelId, Http},
     Framework, FrameworkBuilder,
 };
 use tokio::sync::Mutex;
-use toml::Value as TomlValue;
 
 use crate::{database::database::Database, log, structs::Chapter, CoreMessage};
 struct Data {
@@ -16,20 +15,6 @@ struct Data {
 }
 type PoiseError = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, Data, PoiseError>;
-
-pub fn get_discord_token(token: Option<&TomlValue>) -> Result<String> {
-    if token.is_none() {
-        bail!("Discord token not found.")
-    }
-
-    let token = token
-        .unwrap()
-        .as_str()
-        .ok_or(anyhow!("Discord token is not a string."))?;
-
-    let token = token.to_owned();
-    Ok(token)
-}
 
 pub async fn connect_discord(
     database: Arc<Mutex<dyn Database>>,
