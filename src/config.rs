@@ -6,6 +6,8 @@ use toml::{map::Map, Value as TomlValue};
 
 use crate::structs::{JsonDateTimeFormat, ParseMode, Target, TargetKeys, TargetTags};
 
+/// Parses the entire configuration TOML file.
+/// If the filename is not specified, uses "settings.toml" as default.
 pub fn get_config(filename: Option<&str>) -> Result<TomlValue> {
     let filename = filename.unwrap_or("settings.toml");
 
@@ -37,6 +39,7 @@ pub fn get_config(filename: Option<&str>) -> Result<TomlValue> {
     Ok(config)
 }
 
+/// Fetches the Discord token from a TOML Value object.
 pub fn get_discord_token(token: Option<&TomlValue>) -> Result<String> {
     if token.is_none() {
         bail!("Discord token not found.")
@@ -51,6 +54,7 @@ pub fn get_discord_token(token: Option<&TomlValue>) -> Result<String> {
     Ok(token)
 }
 
+/// Fetches the cron schedule string from a TOML Value object.
 pub fn get_cron_schedule(schedule: Option<&TomlValue>) -> Result<Option<String>> {
     if schedule.is_none() {
         return Ok(None);
@@ -66,6 +70,7 @@ pub fn get_cron_schedule(schedule: Option<&TomlValue>) -> Result<Option<String>>
     Ok(Some(schedule))
 }
 
+/// Fetches and parses the gofer targets inside a TOML Value object.
 pub fn get_targets(config: Option<&TomlValue>) -> Result<Vec<Target>> {
     if config.is_none() {
         bail!("No targets found.")
@@ -115,6 +120,7 @@ pub fn get_targets(config: Option<&TomlValue>) -> Result<Vec<Target>> {
     Ok(targets)
 }
 
+/// Gets the "parse keys" for a targets that has a JSON source.
 fn parse_keys(toml_keys: Option<&TomlValue>) -> Result<Option<TargetKeys>> {
     if toml_keys.is_none() {
         return Ok(None);
@@ -143,6 +149,7 @@ fn parse_keys(toml_keys: Option<&TomlValue>) -> Result<Option<TargetKeys>> {
     }))
 }
 
+/// Gets the "parse tags" for a targets that has an HTML source.
 fn parse_tags(toml_tags: Option<&TomlValue>) -> Result<Option<TargetTags>> {
     if toml_tags.is_none() {
         return Ok(None);
@@ -177,6 +184,7 @@ fn parse_tags(toml_tags: Option<&TomlValue>) -> Result<Option<TargetTags>> {
     }))
 }
 
+/// Converts a TOML Value to a String.
 fn convert_value_to_string(value: &TomlValue, name: &str) -> Result<String> {
     let result = value
         .get(name)
@@ -188,6 +196,9 @@ fn convert_value_to_string(value: &TomlValue, name: &str) -> Result<String> {
     Ok(result)
 }
 
+/// Converts a TOML Value to a vector of string.
+/// If the TOML Value is not an array but one string, then it's wrapped into a vector of string
+/// with it just being the only item.
 fn convert_value_to_array_of_string(value: &TomlValue, name: &str) -> Result<Vec<String>> {
     let value = value
         .get(name)
@@ -212,6 +223,7 @@ fn convert_value_to_array_of_string(value: &TomlValue, name: &str) -> Result<Vec
     Ok(vector)
 }
 
+/// Converts a map of String => TOML Value into a hashmap of String => String.
 fn convert_toml_map_to_string_hashmap(
     toml_map: &Map<String, TomlValue>,
 ) -> HashMap<String, String> {
@@ -224,6 +236,8 @@ fn convert_toml_map_to_string_hashmap(
     hashmap
 }
 
+/// Converts a map of String => TOML Value into a hashmap of String => JSON Value.
+/// Part of `convert_table_to_hashmap` function.
 fn convert_toml_map_to_value_hashmap(
     toml_map: &Map<String, TomlValue>,
 ) -> HashMap<String, JsonValue> {
@@ -236,6 +250,8 @@ fn convert_toml_map_to_value_hashmap(
     hashmap
 }
 
+/// Converts a TOML Table Value to a hashmap of String => JSON Value.
+/// This will call `convert_toml_map_to_value_hashmap` if the table isn't empty.
 fn convert_table_to_hashmap(value: &TomlValue, name: &str) -> Result<HashMap<String, JsonValue>> {
     let result = match value.get(name) {
         Some(table) => convert_toml_map_to_value_hashmap(table.as_table().unwrap()),

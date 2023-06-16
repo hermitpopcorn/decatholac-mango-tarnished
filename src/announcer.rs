@@ -15,6 +15,8 @@ use crate::{
     CoreMessage,
 };
 
+/// Spawns one thread for each registered Server,
+/// sending information on chapters that haven't been announced on that Server.
 pub async fn dispatch_announcer(
     database: Arc<Mutex<dyn Database>>,
     discord_http: Arc<Http>,
@@ -42,6 +44,8 @@ pub async fn dispatch_announcer(
     Ok(())
 }
 
+/// Child process of `dispatch_announcer`.
+/// This function gets run for every thread.
 async fn announce_for_server(
     database: Arc<Mutex<dyn Database>>,
     discord_http: Arc<Http>,

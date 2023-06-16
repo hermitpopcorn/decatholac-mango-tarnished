@@ -26,6 +26,7 @@ mod parsers;
 mod structs;
 mod utils;
 
+/// Enum of message types that will be sent from spawned threads back to the main thread.
 pub enum CoreMessage {
     StartGofer,
     GoferFinished,
@@ -36,6 +37,7 @@ pub enum CoreMessage {
     Quit,
 }
 
+/// Types of workers.
 #[derive(PartialEq)]
 enum Worker {
     Gofer,
@@ -57,12 +59,16 @@ impl std::fmt::Display for Worker {
     }
 }
 
+/// A cron that will send a message to the main thread to start up the Gofer worker periodically.
 struct WorkerCron {
     schedule: Option<String>,
     sender: Sender<CoreMessage>,
 }
 
 impl Job for WorkerCron {
+    /// The schedule will defer to the struct's `schedule` property,
+    /// but if it failed to parse it, a sensible default (once every 12 PM)
+    /// will be used instead.
     fn schedule(&self) -> Schedule {
         if self.schedule.as_ref().is_none() {
             return "0 0 12 * * *".parse().unwrap();
@@ -246,6 +252,9 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+/// Checks whether a worker already exists in the handle or not.
+/// This is to keep the core control from starting multiple instances of the same worker.
+/// The function returns the index wrapped in `Some` if it does, and `None` if it does not.
 fn get_worker_index(
     handles: &Vec<(Worker, JoinHandle<Result<()>>)>,
     what: Worker,

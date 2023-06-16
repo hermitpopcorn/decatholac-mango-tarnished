@@ -14,6 +14,9 @@ use crate::{
     CoreMessage,
 };
 
+/// Spawns one thread for each Target,
+/// making a HTTP request and then parsing the contents.
+/// If there are new Chapters, saves them to the database.
 pub async fn dispatch_gofers(
     database: Arc<Mutex<dyn Database>>,
     sender: Sender<CoreMessage>,
@@ -38,6 +41,8 @@ pub async fn dispatch_gofers(
     Ok(())
 }
 
+/// Child process of `dispatch_gofers`.
+/// This function gets run for every thread.
 pub async fn run_gofer(database: Arc<Mutex<dyn Database>>, target: Target) -> Result<()> {
     log!("{} Gofer started for {}...", "[GOFR]".green(), target.name);
     let mut chapters: Option<Vec<Chapter>> = None;
@@ -94,6 +99,8 @@ pub async fn run_gofer(database: Arc<Mutex<dyn Database>>, target: Target) -> Re
     Ok(())
 }
 
+/// Makes a HTTP request to get the response body from a Target's `source`,
+/// and then parses the body using the defined `mode`.
 async fn fetch_chapters(target: &Target) -> Result<Vec<Chapter>> {
     let body = fetch_body(&target.source, &target.request_headers).await?;
 
@@ -106,6 +113,8 @@ async fn fetch_chapters(target: &Target) -> Result<Vec<Chapter>> {
     Ok(chapters)
 }
 
+/// Makes a HTTP request to get the response body from a given URL.
+/// Can optionally supply headers.
 async fn fetch_body(url: &str, headers: &Option<HashMap<String, String>>) -> Result<String> {
     let client = Client::builder().gzip(true).brotli(true).build()?;
     let mut request = client.get(url);

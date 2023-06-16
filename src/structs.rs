@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use chrono::prelude::*;
 use serde_json::Value;
 
+/// Contains information of a Server that's registered to the bot.
 #[derive(Debug, Clone)]
 pub struct Server {
     pub identifier: String,
@@ -11,6 +12,9 @@ pub struct Server {
     pub is_announcing: bool,
 }
 
+/// Chapter of a manga.
+/// `number` may not be the same as the chapter's release number,
+/// just an unique identifier to set it apart from other chapters.
 #[derive(Debug, Clone)]
 pub struct Chapter {
     pub manga: String,
@@ -21,6 +25,7 @@ pub struct Chapter {
     pub logged_at: Option<DateTime<Utc>>,
 }
 
+/// The three supported parse modes.
 #[derive(Debug, Clone)]
 pub enum ParseMode {
     Rss,
@@ -28,6 +33,7 @@ pub enum ParseMode {
     Html,
 }
 
+/// Each target defines a source to get manga updates from.
 #[derive(Debug, Clone)]
 pub struct Target {
     pub name: String,
@@ -42,6 +48,7 @@ pub struct Target {
     pub tags: Option<TargetTags>,
 }
 
+/// Enum of supported datetime parse formats for the JSON parser.
 #[derive(Debug, Clone)]
 pub enum JsonDateTimeFormat {
     UnixSec,
@@ -51,6 +58,7 @@ pub enum JsonDateTimeFormat {
     Rfc3339,
 }
 
+/// JSON object keys information for parsing from a JSON source.
 #[derive(Debug, Clone)]
 pub struct TargetKeys {
     pub chapters: String,
@@ -62,6 +70,7 @@ pub struct TargetKeys {
     pub skip: HashMap<String, Value>,
 }
 
+/// Strings of tag and attribute names for parsing from a HTML source.
 #[derive(Debug, Clone)]
 pub struct TargetTags {
     pub chapters_tag: String,

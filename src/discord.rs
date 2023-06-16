@@ -17,6 +17,7 @@ struct Data {
 type PoiseError = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, Data, PoiseError>;
 
+/// Connects to Discord and initializes the bot, setting up commands, etc.
 pub async fn connect_discord(
     database: Arc<Mutex<dyn Database>>,
     sender: Sender<CoreMessage>,
@@ -103,10 +104,12 @@ async fn set_as_feed_channel(ctx: Context<'_>) -> Result<(), PoiseError> {
     Ok(())
 }
 
+/// Helper to get `ChannelId` object from a channel ID string.
 pub fn get_channel_id(channel_id: &str) -> Result<ChannelId> {
     Ok(ChannelId(channel_id.parse()?))
 }
 
+/// Send an link-embed message to a certain feed channel containing a Chapter's information (title, url, etc.).
 pub async fn send_chapters(http: &Http, channel: ChannelId, chapters: Vec<Chapter>) -> Result<()> {
     for chapter in chapters {
         let title = format!("[{}] {}", chapter.manga, chapter.title);
@@ -120,6 +123,8 @@ pub async fn send_chapters(http: &Http, channel: ChannelId, chapters: Vec<Chapte
     Ok(())
 }
 
+/// Does cleanup before disconnecting from Discord.
+/// At this point this only unregisters all global commands.
 pub async fn disconnect_discord(http: &Http) -> Result<()> {
     log!("{} Disconnecting Discord...", "[DSCD]".magenta());
     let commands = http.get_global_application_commands().await;
