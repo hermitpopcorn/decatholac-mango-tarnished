@@ -7,7 +7,7 @@ use config::{get_config, get_cron_schedule, get_discord_token, get_targets};
 use crony::{Job, Runner, Schedule};
 use crossbeam::channel::{Receiver, Sender};
 use database::sqlite::SqliteDatabase;
-use discord::connect_discord;
+use discord::{connect_discord, disconnect_discord};
 use gofer::dispatch_gofers;
 use poise::serenity_prelude::Http;
 use tokio::{
@@ -41,6 +41,20 @@ enum Worker {
     Gofer,
     Announcer,
     DiscordBot,
+}
+
+impl std::fmt::Display for Worker {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Worker::Gofer => "Gofer",
+                Worker::Announcer => "Announcer",
+                Worker::DiscordBot => "Discord Bot",
+            }
+        )
+    }
 }
 
 struct WorkerCron {
@@ -101,6 +115,17 @@ async fn main() -> Result<()> {
     }));
     runner = runner.run();
 
+    // Create handler for termination signal
+    let termination_sender = sender.clone();
+    spawn(async {
+        ctrlc::set_handler(move || {
+            termination_sender
+                .send(CoreMessage::Quit)
+                .expect("Could not send termination signal on channel.")
+        })
+        .expect("Error setting Ctrl-C handler.");
+    });
+
     // One-shot toggle
     let mut boot = true;
 
@@ -123,13 +148,13 @@ async fn main() -> Result<()> {
                                 targets.clone(),
                             )),
                         ));
-                        log!("{} Tracking Gofer handle.", "[CORE]".blue());
+                        log!("{} Tracking {} handle.", "[CORE]".blue(), Worker::Gofer);
                     }
                 }
                 CoreMessage::GoferFinished => {
                     let index = get_worker_index(&handles, Worker::Gofer);
                     if index.is_some() {
-                        log!("{} Removed Gofer handle.", "[CORE]".blue());
+                        log!("{} Removed {} handle.", "[CORE]".blue(), Worker::Gofer);
                         handles.remove(index.unwrap());
                     }
 
@@ -146,7 +171,7 @@ async fn main() -> Result<()> {
                 }
                 CoreMessage::StartAnnouncer => {
                     if discord_http.is_none() {
-                        log!("{} Could not start Announcer because Discord API has not been received by core control.", "[CORE]".blue());
+                        log!("{} Could not start {} because Discord API has not been received by core control.", "[CORE]".blue(), Worker::Announcer);
                         continue;
                     }
 
@@ -162,18 +187,22 @@ async fn main() -> Result<()> {
                             sender.clone(),
                         )),
                     ));
-                    log!("{} Tracking Announcer handle.", "[CORE]".blue());
+                    log!("{} Tracking {} handle.", "[CORE]".blue(), Worker::Announcer);
                 }
                 CoreMessage::AnnouncerFinished => {
                     let index = get_worker_index(&handles, Worker::Announcer);
                     if index.is_some() {
-                        log!("{} Removed Announcer handle.", "[CORE]".blue());
+                        log!("{} Removed {} handle.", "[CORE]".blue(), Worker::Announcer);
                         handles.remove(index.unwrap());
                     }
                 }
                 CoreMessage::StartDiscordBot => {
                     if get_worker_index(&handles, Worker::DiscordBot).is_none() {
-                        log!("{} Tracking DiscordBot handle.", "[CORE]".blue());
+                        log!(
+                            "{} Tracking {} handle.",
+                            "[CORE]".blue(),
+                            Worker::DiscordBot,
+                        );
                         handles.push((
                             Worker::DiscordBot,
                             spawn(connect_discord(
@@ -196,6 +225,24 @@ async fn main() -> Result<()> {
     }
 
     runner.stop();
+
+    for handle in handles {
+        match handle.0 {
+            Worker::Gofer | Worker::Announcer => {
+                handle.1.abort();
+                log!("{} {} handle aborted.", "[CORE]".blue(), handle.0);
+            }
+            Worker::DiscordBot => {
+                if discord_http.as_ref().is_some() {
+                    let _ = disconnect_discord(discord_http.as_ref().unwrap()).await;
+                }
+                handle.1.abort();
+                log!("{} {} handle aborted.", "[CORE]".blue(), Worker::DiscordBot);
+            }
+        };
+    }
+
+    log!("{} Goodbye!", "[CORE]".blue());
     Ok(())
 }
 

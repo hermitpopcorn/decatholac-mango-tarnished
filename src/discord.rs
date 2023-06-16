@@ -119,3 +119,30 @@ pub async fn send_chapters(http: &Http, channel: ChannelId, chapters: Vec<Chapte
 
     Ok(())
 }
+
+pub async fn disconnect_discord(http: &Http) -> Result<()> {
+    log!("{} Disconnecting Discord...", "[DSCD]".magenta());
+    let commands = http.get_global_application_commands().await;
+    if commands.is_ok() {
+        let commands = commands.unwrap();
+        for command in commands {
+            let delete_command = http.delete_global_application_command(command.id.0).await;
+            if delete_command.is_err() {
+                log!(
+                    "{} Could not remove command `{}` ({}).",
+                    "[DSCD]".magenta(),
+                    command.name,
+                    delete_command.unwrap_err(),
+                );
+            }
+        }
+    } else {
+        log!(
+            "{} Could not retrieve global commands ({}).",
+            "[DSCD]".magenta(),
+            commands.unwrap_err(),
+        );
+    }
+
+    Ok(())
+}
