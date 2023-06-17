@@ -14,6 +14,8 @@ pub trait Database: Send {
     /// Fetches a vector of chapters that have not been announced for a certain Server.
     fn get_unnanounced_chapters(&self, guild_id: &str) -> Result<Vec<Chapter>>;
 
+    /// Gets a single server by their ID from the database.
+    fn get_server(&self, guild_id: &str) -> Result<Server>;
     /// Fetches the entire list of Servers that are in the database.
     fn get_servers(&self) -> Result<Vec<Server>>;
     /// Fetches the Channel ID of the text channel that's set as the "feed channel" for a certain Server.

@@ -166,7 +166,20 @@ impl Database for SqliteDatabase {
         Ok(chapters)
     }
 
-    fn get_servers(&self) -> Result<Vec<crate::structs::Server>> {
+    fn get_server(&self, guild_id: &str) -> Result<Server> {
+        let channel_id = self.get_feed_channel(guild_id);
+
+        if channel_id.is_err() {
+            bail!("Feed channel has not been set for this server.")
+        }
+
+        Ok(Server {
+            identifier: String::from(guild_id),
+            feed_channel_identifier: channel_id?,
+        })
+    }
+
+    fn get_servers(&self) -> Result<Vec<Server>> {
         let mut statement = self
             .connection
             .prepare("SELECT guildId, channelId FROM Servers")?;
