@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use announcer::dispatch_announcer;
+use announcer::{dispatch_announcer, dispatch_solo_announcer};
 use anyhow::Result;
 use colored::Colorize;
 use config::{get_config, get_cron_schedule, get_discord_token, get_targets};
@@ -10,6 +10,7 @@ use database::sqlite::SqliteDatabase;
 use discord::{connect_discord, disconnect_discord};
 use gofer::dispatch_gofers;
 use poise::serenity_prelude::Http;
+use structs::Server;
 use tokio::{
     spawn,
     sync::Mutex,
@@ -32,6 +33,8 @@ pub enum CoreMessage {
     GoferFinished,
     StartAnnouncer,
     AnnouncerFinished,
+    StartSoloAnnouncer(Server),
+    SoloAnnouncerFinished(Server),
     StartDiscordBot,
     TransferDiscordHttp(Arc<Http>),
     Quit,
@@ -42,6 +45,7 @@ pub enum CoreMessage {
 enum Worker {
     Gofer,
     Announcer,
+    SoloAnnouncer(Server),
     DiscordBot,
 }
 
@@ -51,9 +55,11 @@ impl std::fmt::Display for Worker {
             f,
             "{}",
             match self {
-                Worker::Gofer => "Gofer",
-                Worker::Announcer => "Announcer",
-                Worker::DiscordBot => "Discord Bot",
+                Worker::Gofer => format!("Gofer"),
+                Worker::Announcer => format!("Announcer"),
+                Worker::SoloAnnouncer(server) =>
+                    format!("Solo Announcer for {}", server.identifier),
+                Worker::DiscordBot => format!("Discord Bot"),
             }
         )
     }
@@ -202,6 +208,34 @@ async fn main() -> Result<()> {
                         handles.remove(index.unwrap());
                     }
                 }
+                CoreMessage::StartSoloAnnouncer(server) => {
+                    if discord_http.is_none() {
+                        log!("{} Could not start {} because Discord API has not been received by core control.", "[CORE]".blue(), Worker::Announcer);
+                        continue;
+                    }
+
+                    handles.push((
+                        Worker::SoloAnnouncer(server.clone()),
+                        spawn(dispatch_solo_announcer(
+                            database_arc.clone(),
+                            discord_http.clone().unwrap(),
+                            sender.clone(),
+                            server,
+                        )),
+                    ));
+                    log!("{} Tracking {} handle.", "[CORE]".blue(), Worker::Announcer);
+                }
+                CoreMessage::SoloAnnouncerFinished(server) => {
+                    let index = get_worker_index(&handles, Worker::SoloAnnouncer(server.clone()));
+                    if index.is_some() {
+                        log!(
+                            "{} Removed {} handle.",
+                            "[CORE]".blue(),
+                            Worker::SoloAnnouncer(server)
+                        );
+                        handles.remove(index.unwrap());
+                    }
+                }
                 CoreMessage::StartDiscordBot => {
                     if get_worker_index(&handles, Worker::DiscordBot).is_none() {
                         log!(
@@ -234,7 +268,7 @@ async fn main() -> Result<()> {
 
     for handle in handles {
         match handle.0 {
-            Worker::Gofer | Worker::Announcer => {
+            Worker::Gofer | Worker::Announcer | Worker::SoloAnnouncer(_) => {
                 handle.1.abort();
                 log!("{} {} handle aborted.", "[CORE]".blue(), handle.0);
             }

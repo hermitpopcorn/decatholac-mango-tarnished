@@ -44,6 +44,38 @@ pub async fn dispatch_announcer(
     Ok(())
 }
 
+pub async fn dispatch_solo_announcer(
+    database: Arc<Mutex<dyn Database>>,
+    discord_http: Arc<Http>,
+    sender: Sender<CoreMessage>,
+    server: Server,
+) -> Result<()> {
+    log!(
+        "{} Dispatching Solo Announcer for {}...",
+        "[ANNO]".red(),
+        server.identifier
+    );
+
+    let announce = announce_for_server(database, discord_http, server.clone()).await;
+
+    if announce.is_ok() {
+        log!(
+            "{} Solo Announcer for {} has finished.",
+            "[ANNO]".red(),
+            server.identifier,
+        );
+    } else {
+        log!(
+            "{} Solo Announcer for {} failed.",
+            "[ANNO]".red(),
+            server.identifier,
+        );
+    }
+
+    let _ = sender.send(CoreMessage::SoloAnnouncerFinished(server))?;
+    Ok(())
+}
+
 /// Child process of `dispatch_announcer`.
 /// This function gets run for every thread.
 async fn announce_for_server(

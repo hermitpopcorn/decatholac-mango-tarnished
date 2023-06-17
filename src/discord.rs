@@ -69,10 +69,20 @@ async fn trigger_start_gofer(ctx: Context<'_>) -> Result<(), PoiseError> {
     Ok(())
 }
 
-/// Print all unannounced feed items.
+/// Print all unannounced feed items for the current server.
 #[poise::command(slash_command, ephemeral, rename = "announce")]
 async fn trigger_start_announcer(ctx: Context<'_>) -> Result<(), PoiseError> {
-    let _ = ctx.data().sender.send(CoreMessage::StartAnnouncer)?;
+    let guild_id = ctx.guild_id().expect("Could not get Guild ID.");
+    let guild_id = guild_id.to_string();
+
+    let db = ctx.data().database.lock().await;
+    let server = db.get_server(guild_id.as_str())?;
+
+    let _ = ctx
+        .data()
+        .sender
+        .send(CoreMessage::StartSoloAnnouncer(server))?;
+
     ctx.say("Announcement process triggered.").await?;
     Ok(())
 }
