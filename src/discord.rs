@@ -64,7 +64,7 @@ pub async fn connect_discord(
 /// Manually trigger the fetch process for new chapters.
 #[poise::command(slash_command, ephemeral, rename = "fetch")]
 async fn trigger_start_gofer(ctx: Context<'_>) -> Result<(), PoiseError> {
-    let _ = ctx.data().sender.send(CoreMessage::StartGofer)?;
+    let _ = ctx.data().sender.send(CoreMessage::StartGofer(false))?;
     ctx.say("Fetching process triggered.").await?;
     Ok(())
 }

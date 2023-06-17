@@ -29,8 +29,8 @@ mod utils;
 
 /// Enum of message types that will be sent from spawned threads back to the main thread.
 pub enum CoreMessage {
-    StartGofer,
-    GoferFinished,
+    StartGofer(bool),
+    GoferFinished(bool),
     StartAnnouncer,
     AnnouncerFinished,
     StartSoloAnnouncer(Server),
@@ -90,7 +90,7 @@ impl Job for WorkerCron {
     fn handle(&self) {
         log!("{} WorkerCron handler triggered.", "[CORE]".blue());
 
-        match self.sender.send(CoreMessage::StartGofer) {
+        match self.sender.send(CoreMessage::StartGofer(true)) {
             Ok(_) => (),
             Err(_) => log!("{} Something went wrong with WorkerCron.", "[CORE]".blue()),
         };
@@ -143,14 +143,14 @@ async fn main() -> Result<()> {
 
     loop {
         if boot {
-            let _ = sender.send(CoreMessage::StartGofer)?;
+            let _ = sender.send(CoreMessage::StartGofer(true))?;
             let _ = sender.send(CoreMessage::StartDiscordBot)?;
             boot = false;
         }
 
         if let Ok(message) = receiver.recv() {
             match message {
-                CoreMessage::StartGofer => {
+                CoreMessage::StartGofer(triggers_announcer) => {
                     if get_worker_index(&handles, Worker::Gofer).is_none() {
                         handles.push((
                             Worker::Gofer,
@@ -158,28 +158,31 @@ async fn main() -> Result<()> {
                                 database_arc.clone(),
                                 sender.clone(),
                                 targets.clone(),
+                                triggers_announcer,
                             )),
                         ));
                         log!("{} Tracking {} handle.", "[CORE]".blue(), Worker::Gofer);
                     }
                 }
-                CoreMessage::GoferFinished => {
+                CoreMessage::GoferFinished(triggers_announcer) => {
                     let index = get_worker_index(&handles, Worker::Gofer);
                     if index.is_some() {
                         log!("{} Removed {} handle.", "[CORE]".blue(), Worker::Gofer);
                         handles.remove(index.unwrap());
                     }
 
-                    // Spawn another thread to wait a little and trigger announcer
-                    let cloned_discord_http = discord_http.clone();
-                    let cloned_sender = sender.clone();
-                    spawn(async move {
-                        sleep(Duration::from_millis(2500)).await;
+                    if triggers_announcer {
+                        // Spawn another thread to wait a little and trigger announcer
+                        let cloned_discord_http = discord_http.clone();
+                        let cloned_sender = sender.clone();
+                        spawn(async move {
+                            sleep(Duration::from_millis(2500)).await;
 
-                        if cloned_discord_http.is_some() {
-                            cloned_sender.send(CoreMessage::StartAnnouncer).unwrap();
-                        }
-                    });
+                            if cloned_discord_http.is_some() {
+                                cloned_sender.send(CoreMessage::StartAnnouncer).unwrap();
+                            }
+                        });
+                    }
                 }
                 CoreMessage::StartAnnouncer => {
                     if discord_http.is_none() {

@@ -21,6 +21,7 @@ pub async fn dispatch_gofers(
     database: Arc<Mutex<dyn Database>>,
     sender: Sender<CoreMessage>,
     targets: Vec<Target>,
+    triggers_announcer: bool,
 ) -> Result<()> {
     log!("{} Dispatching Gofers...", "[GOFR]".green());
 
@@ -37,7 +38,7 @@ pub async fn dispatch_gofers(
     }
 
     log!("{} All Gofers have returned.", "[GOFR]".green());
-    let _ = sender.send(CoreMessage::GoferFinished)?;
+    let _ = sender.send(CoreMessage::GoferFinished(triggers_announcer))?;
     Ok(())
 }
 
