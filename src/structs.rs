@@ -10,6 +10,12 @@ pub struct Server {
     pub feed_channel_identifier: String,
 }
 
+impl PartialEq for Server {
+    fn eq(&self, other: &Self) -> bool {
+        self.identifier == other.identifier
+    }
+}
+
 /// Chapter of a manga.
 /// `number` may not be the same as the chapter's release number,
 /// just an unique identifier to set it apart from other chapters.
