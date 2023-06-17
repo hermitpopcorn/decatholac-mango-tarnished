@@ -8,8 +8,6 @@ use serde_json::Value;
 pub struct Server {
     pub identifier: String,
     pub feed_channel_identifier: String,
-    pub last_announced_at: DateTime<Utc>,
-    pub is_announcing: bool,
 }
 
 /// Chapter of a manga.

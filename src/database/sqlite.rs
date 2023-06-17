@@ -169,23 +169,14 @@ impl Database for SqliteDatabase {
     fn get_servers(&self) -> Result<Vec<crate::structs::Server>> {
         let mut statement = self
             .connection
-            .prepare("SELECT guildId, channelId, lastAnnouncedAt, isAnnouncing FROM Servers")?;
+            .prepare("SELECT guildId, channelId FROM Servers")?;
         let mut result = statement.query([])?;
 
         let mut servers = vec![];
         while let Some(row) = result.next()? {
-            let is_announcing: i8 = row.get(3)?;
-            let is_announcing = match is_announcing {
-                1 => true,
-                0 => false,
-                _ => bail!("Invalid bool value"),
-            };
-
             servers.push(Server {
                 identifier: row.get(0)?,
                 feed_channel_identifier: row.get(1)?,
-                last_announced_at: row.get(2)?,
-                is_announcing: is_announcing,
             });
         }
 
