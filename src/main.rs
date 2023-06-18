@@ -73,16 +73,16 @@ struct WorkerCron {
 
 impl Job for WorkerCron {
     /// The schedule will defer to the struct's `schedule` property,
-    /// but if it failed to parse it, a sensible default (once every 12 PM)
+    /// but if it failed to parse it, a sensible default (once every 10 AM JST)
     /// will be used instead.
     fn schedule(&self) -> Schedule {
         if self.schedule.as_ref().is_none() {
-            return "0 0 12 * * *".parse().unwrap();
+            return "0 0 1 * * *".parse().unwrap();
         }
 
         let schedule: Schedule = match self.schedule.as_ref().unwrap().parse() {
             Ok(s) => s,
-            Err(_) => "0 0 12 * * *".parse().unwrap(),
+            Err(_) => "0 0 1 * * *".parse().unwrap(),
         };
 
         schedule
