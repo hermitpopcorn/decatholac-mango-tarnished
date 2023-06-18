@@ -1,6 +1,7 @@
 use std::{collections::HashMap, env, fs};
 
 use anyhow::{anyhow, bail, Result};
+use crony::Schedule;
 use serde_json::{json, Value as JsonValue};
 use toml::{map::Map, Value as TomlValue};
 
@@ -55,19 +56,24 @@ pub fn get_discord_token(token: Option<&TomlValue>) -> Result<String> {
 }
 
 /// Fetches the cron schedule string from a TOML Value object.
-pub fn get_cron_schedule(schedule: Option<&TomlValue>) -> Result<Option<String>> {
+pub fn get_cron_schedule(schedule: Option<&TomlValue>) -> Result<Schedule> {
+    let default = "0 0 1 * * *".parse().unwrap();
+
     if schedule.is_none() {
-        return Ok(None);
+        return Ok(default);
     }
 
     let schedule = match schedule.unwrap().as_str() {
         Some(schedule) => schedule.to_owned(),
-        None => {
-            return Ok(None);
-        }
+        None => return Ok(default),
     };
 
-    Ok(Some(schedule))
+    let schedule = match schedule.parse() {
+        Ok(schedule) => schedule,
+        Err(_) => return Ok(default),
+    };
+
+    Ok(schedule)
 }
 
 /// Fetches and parses the gofer targets inside a TOML Value object.

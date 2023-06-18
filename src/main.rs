@@ -67,7 +67,7 @@ impl std::fmt::Display for Worker {
 
 /// A cron that will send a message to the main thread to start up the Gofer worker periodically.
 struct WorkerCron {
-    schedule: Option<String>,
+    schedule: Schedule,
     sender: Sender<CoreMessage>,
 }
 
@@ -76,16 +76,7 @@ impl Job for WorkerCron {
     /// but if it failed to parse it, a sensible default (once every 10 AM JST)
     /// will be used instead.
     fn schedule(&self) -> Schedule {
-        if self.schedule.as_ref().is_none() {
-            return "0 0 1 * * *".parse().unwrap();
-        }
-
-        let schedule: Schedule = match self.schedule.as_ref().unwrap().parse() {
-            Ok(s) => s,
-            Err(_) => "0 0 1 * * *".parse().unwrap(),
-        };
-
-        schedule
+        self.schedule.clone()
     }
     fn handle(&self) {
         log!("{} WorkerCron handler triggered.", "[CORE]".blue());
