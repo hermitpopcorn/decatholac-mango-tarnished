@@ -120,14 +120,12 @@ async fn main() -> Result<()> {
 
     // Create handler for termination signal
     let termination_sender = sender.clone();
-    spawn(async {
-        ctrlc::set_handler(move || {
-            termination_sender
-                .send(CoreMessage::Quit)
-                .expect("Could not send termination signal on channel.")
-        })
-        .expect("Error setting Ctrl-C handler.");
-    });
+    ctrlc::set_handler(move || {
+        termination_sender
+            .send(CoreMessage::Quit)
+            .expect("Could not send termination signal on channel.")
+    })
+    .expect("Error setting Ctrl-C handler.");
 
     // One-shot toggle
     let mut boot = true;
