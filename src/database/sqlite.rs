@@ -73,25 +73,6 @@ impl Database for SqliteDatabase {
             )?;
         }
 
-        let mut statement = self.connection.prepare(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'Subscriptions'",
-        )?;
-        let check = statement.query_row([], |_row| Ok(())).optional()?;
-
-        if check.is_none() {
-            log!("{} Initializing Subscriptions table...", "[DATA]".yellow());
-            self.connection.execute(
-                "CREATE TABLE 'Subscriptions' (
-                    'id'      INTEGER,
-                    'guildId' VARCHAR(255) NOT NULL,
-                    'userId'  VARCHAR(255) NOT NULL,
-                    'title'   VARCHAR(255) NOT NULL,
-                    PRIMARY KEY('id' AUTOINCREMENT)
-                )",
-                [],
-            )?;
-        }
-
         Ok(())
     }
 
