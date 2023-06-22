@@ -40,13 +40,14 @@ impl Database for SqliteDatabase {
             log!("{} Initializing Chapters table...", "[DATA]".yellow());
             self.connection.execute(
                 "CREATE TABLE 'Chapters' (
-                    'id'       INTEGER,
-                    'manga'    VARCHAR(255) NOT NULL,
-                    'title'    VARCHAR(255) NOT NULL,
-                    'number'   VARCHAR(255) NOT NULL,
-                    'url'      VARCHAR(255) NOT NULL,
-                    'date'     DATETIME,
-                    'loggedAt' DATETIME NOT NULL,
+                    'id'          INTEGER,
+                    'manga'       VARCHAR(255) NOT NULL,
+                    'title'       VARCHAR(255) NOT NULL,
+                    'number'      VARCHAR(255) NOT NULL,
+                    'url'         VARCHAR(255) NOT NULL,
+                    'date'        DATETIME,
+                    'loggedAt'    DATETIME NOT NULL,
+                    'announcedAt' DATETIME,
                     PRIMARY KEY('id' AUTOINCREMENT)
                 )",
                 [],
@@ -93,16 +94,26 @@ impl Database for SqliteDatabase {
             }
 
             log!(
-                "{} Saving new chapter... [{}]: {}",
+                "{} Saving new chapter... [{}]: {}{}",
                 "[DATA]".yellow(),
                 &chapter.manga,
-                &chapter.title
+                &chapter.title,
+                (|| {
+                    if &chapter.date == &chapter.announced_at {
+                        return String::from("");
+                    }
+
+                    format!(
+                        " (Will be announced on {})",
+                        &chapter.announced_at.format("%Y-%m-%d %H:%M:%S").to_string(),
+                    )
+                })(),
             );
             let mut statement = self.connection.prepare(
                 "INSERT INTO Chapters
-                (manga, title, number, url, date, loggedAt)
+                (manga, title, number, url, date, loggedAt, announcedAt)
                 VALUES
-                (:manga, :title, :number, :url, :date, :logged_at)",
+                (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             )?;
             statement.execute(params![
                 &chapter.manga,
@@ -111,6 +122,7 @@ impl Database for SqliteDatabase {
                 &chapter.url,
                 &chapter.date,
                 Utc::now(),
+                &chapter.announced_at,
             ])?;
         }
 
@@ -126,13 +138,12 @@ impl Database for SqliteDatabase {
         let mut chapters = vec![];
 
         let mut statement = self.connection.prepare(
-            "SELECT manga, title, number, url, date, loggedAt
+            "SELECT manga, title, number, url, date, loggedAt, announcedAt
             FROM Chapters
-            WHERE loggedAt > ?1
-            AND date > ?1
+            WHERE announcedAt > ?1 AND ?2 >= announcedAt
             ORDER BY date ASC",
         )?;
-        let mut result = statement.query(params![last_announced_at])?;
+        let mut result = statement.query(params![last_announced_at, Utc::now()])?;
         while let Some(row) = result.next()? {
             chapters.push(Chapter {
                 manga: row.get(0)?,
@@ -141,6 +152,7 @@ impl Database for SqliteDatabase {
                 url: row.get(3)?,
                 date: row.get(4)?,
                 logged_at: row.get(5)?,
+                announced_at: row.get(6)?,
             });
         }
 

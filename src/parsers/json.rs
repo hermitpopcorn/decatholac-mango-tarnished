@@ -1,5 +1,5 @@
 use anyhow::Result;
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, Duration, TimeZone, Utc};
 use json_dotpath::DotPaths;
 use serde_json::Value;
 
@@ -97,6 +97,7 @@ pub fn parse_json(target: &Target, source: &str) -> Result<Vec<Chapter>> {
                 None => url,
             },
             logged_at: None,
+            announced_at: date + Duration::days(target.delay.unwrap_or(0).into()),
         })
     }
 
@@ -200,6 +201,15 @@ mod test {
         );
         assert_eq!(
             chapters[1].date,
+            DateTime::parse_from_rfc3339("2022-10-11T10:00:00.000+09:00").unwrap(),
+        );
+        // Check announce time
+        assert_eq!(
+            chapters[0].announced_at,
+            DateTime::parse_from_rfc3339("2022-09-27T10:00:00.000+09:00").unwrap(),
+        );
+        assert_eq!(
+            chapters[1].announced_at,
             DateTime::parse_from_rfc3339("2022-10-11T10:00:00.000+09:00").unwrap(),
         );
     }

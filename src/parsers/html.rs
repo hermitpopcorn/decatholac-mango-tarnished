@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use anyhow::{anyhow, bail, Result};
-use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
+use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime, Utc};
 use scraper::{ElementRef, Html, Selector};
 
 use crate::structs::{Chapter, Target};
@@ -103,6 +103,7 @@ pub fn parse_html(target: &Target, source: &str) -> Result<Vec<Chapter>> {
                 None => url,
             },
             logged_at: None,
+            announced_at: date + Duration::days(target.delay.unwrap_or(0).into()),
         })
     }
 
@@ -208,6 +209,15 @@ mod test {
         assert_eq!(
             chapters[1].date,
             DateTime::parse_from_rfc3339("2022-06-03T00:00:00.000+00:00").unwrap(),
+        );
+        // Check announce time
+        assert_eq!(
+            chapters[0].announced_at,
+            DateTime::parse_from_rfc3339("2022-05-22T00:00:00.000+00:00").unwrap(),
+        );
+        assert_eq!(
+            chapters[1].announced_at,
+            DateTime::parse_from_rfc3339("2022-06-10T00:00:00.000+00:00").unwrap(),
         );
     }
 }

@@ -27,6 +27,7 @@ pub struct Chapter {
     pub date: DateTime<Utc>,
     pub url: String,
     pub logged_at: Option<DateTime<Utc>>,
+    pub announced_at: DateTime<Utc>,
 }
 
 /// The three supported parse modes.

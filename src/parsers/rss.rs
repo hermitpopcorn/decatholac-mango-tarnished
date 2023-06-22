@@ -1,5 +1,5 @@
 use anyhow::Result;
-use chrono::Utc;
+use chrono::{Duration, Utc};
 use feed_rs::{model::Link, parser};
 
 use crate::structs::{Chapter, Target};
@@ -17,6 +17,8 @@ pub fn parse_rss(target: &Target, source: &str) -> Result<Vec<Chapter>> {
     for entry in feed.entries {
         let link = get_link_href(&entry.links);
 
+        let date = entry.published.unwrap_or(Utc::now());
+
         chapters.push(Chapter {
             manga: target.name.to_owned(),
             number: entry.id,
@@ -27,6 +29,7 @@ pub fn parse_rss(target: &Target, source: &str) -> Result<Vec<Chapter>> {
                 None => link,
             },
             logged_at: None,
+            announced_at: date + Duration::days(target.delay.unwrap_or(0).into()),
         })
     }
 
@@ -102,6 +105,15 @@ mod test {
         assert_eq!(chapters[0].url, "https://comic-rss.com/episode/00023");
         assert_eq!(chapters[1].url, "https://comic-rss.com/episode/00024");
         // Check dates
+        assert_eq!(
+            chapters[0].date,
+            DateTime::parse_from_rfc2822("Fri, 16 Sep 2022 03:00:00 +0000").unwrap(),
+        );
+        assert_eq!(
+            chapters[1].date,
+            DateTime::parse_from_rfc2822("Fri, 23 Sep 2022 03:00:00 +0000").unwrap(),
+        );
+        // Check announce time
         assert_eq!(
             chapters[0].date,
             DateTime::parse_from_rfc2822("Fri, 16 Sep 2022 03:00:00 +0000").unwrap(),
