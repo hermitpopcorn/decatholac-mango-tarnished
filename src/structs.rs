@@ -43,10 +43,12 @@ pub enum ParseMode {
 pub struct Target {
     pub name: String,
     pub source: String,
-    pub ascending_source: bool, // Whether the source lists item A->Z instead of Z->A like normal
+    /// Whether the source lists item A->Z (old chapters first) instead of Z->A (new chapters first).
+    pub ascending_source: bool,
     pub mode: ParseMode,
     pub base_url: Option<String>,
     pub request_headers: Option<HashMap<String, String>>,
+    /// How much time to delay the announcement of new chapters (in days).
     pub delay: Option<u8>,
     // JSON mode
     pub keys: Option<TargetKeys>,
@@ -86,6 +88,7 @@ pub struct TargetTags {
     pub title_attribute: Option<String>,
     pub date_tag: Option<String>,
     pub date_attribute: Option<String>,
+    /// How to parse the date text. Uses strftime format notation.
     pub date_format: Option<String>,
     pub url_tag: Option<String>,
     pub url_attribute: Option<String>,
