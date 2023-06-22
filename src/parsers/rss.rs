@@ -54,6 +54,7 @@ mod test {
             mode: ParseMode::Rss,
             base_url: Some("https://comic-rss.com".into()),
             request_headers: None,
+            delay: None,
             keys: None,
             tags: None,
         };

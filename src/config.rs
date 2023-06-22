@@ -118,6 +118,10 @@ pub fn get_targets(config: Option<&TomlValue>) -> Result<Vec<Target>> {
                 )),
                 None => None,
             },
+            delay: match config_target.get("delay") {
+                Some(value) => Some(value.as_integer().unwrap().to_owned() as u8),
+                None => None,
+            },
             keys: parse_keys(config_target.get("keys"))?,
             tags: parse_tags(config_target.get("tags"))?,
         })

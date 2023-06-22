@@ -127,6 +127,7 @@ mod test {
             mode: ParseMode::Json,
             base_url: Some("https://comic-json.com".into()),
             request_headers: None,
+            delay: None,
             keys: Some(TargetKeys {
                 chapters: "comic.episodes".into(),
                 number: vec!["volume".into()],

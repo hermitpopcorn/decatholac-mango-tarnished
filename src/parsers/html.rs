@@ -130,6 +130,7 @@ mod test {
             mode: ParseMode::Html,
             base_url: Some("https://comic-html.com".into()),
             request_headers: None,
+            delay: Some(7),
             keys: None,
             tags: Some(TargetTags {
                 chapters_tag: "div#chapterlist li".into(),

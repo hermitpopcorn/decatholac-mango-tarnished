@@ -46,6 +46,7 @@ pub struct Target {
     pub mode: ParseMode,
     pub base_url: Option<String>,
     pub request_headers: Option<HashMap<String, String>>,
+    pub delay: Option<u8>,
     // JSON mode
     pub keys: Option<TargetKeys>,
     // HTML mode
