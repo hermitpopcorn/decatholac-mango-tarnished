@@ -86,6 +86,11 @@ async fn announce_for_server(
     let db_access = database.lock().await;
     let is_announcing = db_access.get_announcing_server_flag(&server.identifier)?;
     if is_announcing {
+        log!(
+            "{} Skipping Server {} to prevent announcement conflicts.",
+            "[ANNO]".red(),
+            &server.identifier,
+        );
         return Ok(());
     }
     db_access.set_announcing_server_flag(&server.identifier, true)?;
