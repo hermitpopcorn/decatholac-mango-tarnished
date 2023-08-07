@@ -1,16 +1,16 @@
 use std::sync::Arc;
 
 use announcer::{dispatch_announcer, dispatch_solo_announcer};
-use anyhow::Result;
+use anyhow::{bail, Result};
 use colored::Colorize;
 use config::{get_config, get_cron_schedule, get_discord_token, get_targets};
 use crony::{Job, Runner, Schedule};
 use crossbeam::channel::{Receiver, Sender};
-use database::sqlite::SqliteDatabase;
+use database::{database::Database, sqlite::SqliteDatabase};
 use discord::{connect_discord, disconnect_discord};
 use gofer::dispatch_gofers;
 use poise::serenity_prelude::Http;
-use structs::Server;
+use structs::{Server, Target};
 use tokio::{
     spawn,
     sync::Mutex,
@@ -41,7 +41,7 @@ pub enum CoreMessage {
 }
 
 /// Types of workers.
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 enum Worker {
     Gofer,
     Announcer,
@@ -127,7 +127,7 @@ async fn main() -> Result<()> {
     })
     .expect("Error setting Ctrl-C handler.");
 
-    // One-shot toggle
+    // Start-on-run toggle
     let mut boot = true;
 
     loop {
@@ -140,25 +140,16 @@ async fn main() -> Result<()> {
         if let Ok(message) = receiver.recv() {
             match message {
                 CoreMessage::StartGofer(triggers_announcer) => {
-                    if get_worker_index(&handles, Worker::Gofer).is_none() {
-                        handles.push((
-                            Worker::Gofer,
-                            spawn(dispatch_gofers(
+                    let _ = start_gofer(
+                        &mut handles,
                                 database_arc.clone(),
                                 sender.clone(),
                                 targets.clone(),
                                 triggers_announcer,
-                            )),
-                        ));
-                        log!("{} Tracking {} handle.", "[CORE]".blue(), Worker::Gofer);
-                    }
+                    );
                 }
                 CoreMessage::GoferFinished(triggers_announcer) => {
-                    let index = get_worker_index(&handles, Worker::Gofer);
-                    if index.is_some() {
-                        log!("{} Removed {} handle.", "[CORE]".blue(), Worker::Gofer);
-                        handles.remove(index.unwrap());
-                    }
+                    let _ = remove_worker_handle(&mut handles, &Worker::Gofer);
 
                     if triggers_announcer {
                         // Spawn another thread to wait a little and trigger announcer
@@ -174,76 +165,36 @@ async fn main() -> Result<()> {
                     }
                 }
                 CoreMessage::StartAnnouncer => {
-                    if discord_http.is_none() {
-                        log!("{} Could not start {} because Discord API has not been received by core control.", "[CORE]".blue(), Worker::Announcer);
-                        continue;
-                    }
-
-                    if get_worker_index(&handles, Worker::Announcer).is_some() {
-                        continue;
-                    }
-
-                    handles.push((
-                        Worker::Announcer,
-                        spawn(dispatch_announcer(
+                    let _ = start_announcer(
+                        &mut handles,
                             database_arc.clone(),
-                            discord_http.clone().unwrap(),
                             sender.clone(),
-                        )),
-                    ));
-                    log!("{} Tracking {} handle.", "[CORE]".blue(), Worker::Announcer);
+                        discord_http.clone(),
+                        None,
+                    );
                 }
                 CoreMessage::AnnouncerFinished => {
-                    let index = get_worker_index(&handles, Worker::Announcer);
-                    if index.is_some() {
-                        log!("{} Removed {} handle.", "[CORE]".blue(), Worker::Announcer);
-                        handles.remove(index.unwrap());
-                    }
+                    let _ = remove_worker_handle(&mut handles, &Worker::Announcer);
                 }
                 CoreMessage::StartSoloAnnouncer(server) => {
-                    if discord_http.is_none() {
-                        log!("{} Could not start {} because Discord API has not been received by core control.", "[CORE]".blue(), Worker::Announcer);
-                        continue;
-                    }
-
-                    handles.push((
-                        Worker::SoloAnnouncer(server.clone()),
-                        spawn(dispatch_solo_announcer(
+                    let _ = start_announcer(
+                        &mut handles,
                             database_arc.clone(),
-                            discord_http.clone().unwrap(),
                             sender.clone(),
-                            server,
-                        )),
-                    ));
-                    log!("{} Tracking {} handle.", "[CORE]".blue(), Worker::Announcer);
+                        discord_http.clone(),
+                        Some(server),
+                    );
                 }
                 CoreMessage::SoloAnnouncerFinished(server) => {
-                    let index = get_worker_index(&handles, Worker::SoloAnnouncer(server.clone()));
-                    if index.is_some() {
-                        log!(
-                            "{} Removed {} handle.",
-                            "[CORE]".blue(),
-                            Worker::SoloAnnouncer(server)
-                        );
-                        handles.remove(index.unwrap());
-                    }
+                    let _ = remove_worker_handle(&mut handles, &Worker::SoloAnnouncer(server));
                 }
                 CoreMessage::StartDiscordBot => {
-                    if get_worker_index(&handles, Worker::DiscordBot).is_none() {
-                        log!(
-                            "{} Tracking {} handle.",
-                            "[CORE]".blue(),
-                            Worker::DiscordBot,
-                        );
-                        handles.push((
-                            Worker::DiscordBot,
-                            spawn(connect_discord(
+                    let _ = start_discord_bot(
+                        &mut handles,
                                 database_arc.clone(),
                                 sender.clone(),
                                 token.clone(),
-                            )),
-                        ));
-                    }
+                    );
                 }
                 CoreMessage::TransferDiscordHttp(http) => {
                     discord_http = Some(http);
@@ -283,13 +234,129 @@ async fn main() -> Result<()> {
 /// The function returns the index wrapped in `Some` if it does, and `None` if it does not.
 fn get_worker_index(
     handles: &Vec<(Worker, JoinHandle<Result<()>>)>,
-    what: Worker,
+    what: &Worker,
 ) -> Option<usize> {
     for (index, handle) in handles.iter().enumerate() {
-        if handle.0 == what {
+        if handle.0 == *what {
             return Some(index);
         }
     }
 
     None
+}
+
+/// Remove a worker from the handle list if it does exist in it.
+fn remove_worker_handle(handles: &mut WorkerHandles, what: &Worker) -> Result<Option<usize>> {
+    let index = get_worker_index(&handles, what);
+    if index.is_none() {
+        return Ok(None);
+    }
+
+    handles.remove(index.unwrap());
+    log!("{} Removed {} handle.", "[CORE]".blue(), what);
+
+    Ok(index)
+}
+
+/// Starts the Discord Bot worker and registers it into the handle list.
+fn start_discord_bot(
+    handles: &mut WorkerHandles,
+    database_arc: Arc<Mutex<dyn Database>>,
+    sender: Sender<CoreMessage>,
+    token: String,
+) -> Result<()> {
+    if get_worker_index(handles, &Worker::DiscordBot).is_some() {
+        bail!("Discord Bot is already running.");
+    }
+
+    log!(
+        "{} Tracking {} handle.",
+        "[CORE]".blue(),
+        Worker::DiscordBot,
+    );
+    handles.push((
+        Worker::DiscordBot,
+        spawn(connect_discord(
+            database_arc.clone(),
+            sender.clone(),
+            token.clone(),
+        )),
+    ));
+
+    Ok(())
+}
+
+/// Starts the Gofer worker and registers it into the handle list.
+fn start_gofer(
+    handles: &mut WorkerHandles,
+    database_arc: Arc<Mutex<dyn Database>>,
+    sender: Sender<CoreMessage>,
+    targets: Vec<Target>,
+    triggers_announcer: bool,
+) -> Result<()> {
+    if get_worker_index(&handles, &Worker::Gofer).is_some() {
+        bail!("Gofer is already running.");
+    }
+
+    handles.push((
+        Worker::Gofer,
+        spawn(dispatch_gofers(
+            database_arc.clone(),
+            sender.clone(),
+            targets.clone(),
+            triggers_announcer,
+        )),
+    ));
+    log!("{} Tracking {} handle.", "[CORE]".blue(), Worker::Gofer);
+
+    Ok(())
+}
+
+/// Starts the Announcer worker and registers it into the handle list.
+fn start_announcer(
+    handles: &mut WorkerHandles,
+    database_arc: Arc<Mutex<dyn Database>>,
+    sender: Sender<CoreMessage>,
+    discord_http: Option<Arc<Http>>,
+    server: Option<Server>,
+) -> Result<()> {
+    let worker = match server {
+        Some(server) => Worker::SoloAnnouncer(server),
+        None => Worker::Announcer,
+    };
+
+    if discord_http.is_none() {
+        log!(
+            "{} Could not start {} because Discord API has not been received by core control.",
+            "[CORE]".blue(),
+            worker,
+        );
+        bail!("Discord API has not been received by core control.");
+    }
+    if worker == Worker::Announcer && get_worker_index(&handles, &Worker::Announcer).is_some() {
+        bail!("Announcer is already running.");
+    }
+
+    let discord_http = discord_http.unwrap();
+
+    let handle = match worker.clone() {
+        Worker::Announcer => (
+            Worker::Announcer,
+            spawn(dispatch_announcer(database_arc, discord_http, sender)),
+        ),
+        Worker::SoloAnnouncer(server) => (
+            Worker::SoloAnnouncer(server.clone()),
+            spawn(dispatch_solo_announcer(
+                database_arc,
+                discord_http,
+                sender,
+                server,
+            )),
+        ),
+        _ => bail!("Invalid match on worker type check."),
+    };
+    handles.push(handle);
+    log!("{} Tracking {} handle.", "[CORE]".blue(), worker);
+
+    Ok(())
 }
