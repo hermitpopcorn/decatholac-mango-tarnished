@@ -88,11 +88,37 @@ impl Job for WorkerCron {
     }
 }
 
+/// A vector of Worker and JoinHandle tuples.
+type WorkerHandles = Vec<(Worker, JoinHandle<Result<()>>)>;
+
+struct Flags {
+    one_shot: bool,
+}
+
+impl Default for Flags {
+    fn default() -> Self {
+        Self { one_shot: false }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Get parameters
+    let mut flags: Flags = Flags {
+        ..Default::default()
+    };
+    let mut args: Vec<String> = std::env::args().collect();
+    args.remove(0);
+    for arg in args {
+        match arg.as_str() {
+            "--oneshot" | "--one-shot" | "-1s" => flags.one_shot = true,
+            _ => continue,
+        }
+    }
+
     // Get config values
     let config = get_config(Some("settings.toml"))?;
-    let targets: Vec<structs::Target> = get_targets(config.get("targets"))?;
+    let targets: Vec<Target> = get_targets(config.get("targets"))?;
     let token = get_discord_token(config.get("token"))?;
     let cron_schedule = get_cron_schedule(config.get("cron"))?;
 
@@ -109,6 +135,49 @@ async fn main() -> Result<()> {
 
     // Setup memory storage for Discord API
     let mut discord_http: Option<Arc<Http>> = None;
+
+    // Run workers sequentially and terminate if one-shot flag is true
+    if flags.one_shot {
+        start_discord_bot(
+            &mut handles,
+            database_arc.clone(),
+            sender.clone(),
+            token.clone(),
+        )
+        .expect("one-shot: Start Discord Bot");
+        let message = receiver.recv()?; // Await for Discord API
+        match message {
+            CoreMessage::TransferDiscordHttp(api) => discord_http = Some(api),
+            _ => panic!("Unexpected response"),
+        }
+        start_gofer(
+            &mut handles,
+            database_arc.clone(),
+            sender.clone(),
+            targets.clone(),
+            true,
+        )
+        .expect("one-shot: Start Gofer");
+        receiver.recv()?; // Await for Gofer to finish
+        start_announcer(
+            &mut handles,
+            database_arc.clone(),
+            sender.clone(),
+            discord_http.clone(),
+            None,
+        )
+        .expect("one-shot: Start Announcer");
+        receiver.recv()?; // Await for Announcer to finish
+        disconnect_discord(discord_http.as_ref().unwrap())
+            .await
+            .expect("one-shot: Disconnect Discord");
+
+        log!(
+            "{} One-shot execution finished. Terminating.",
+            "[CORE]".blue()
+        );
+        return Ok(());
+    }
 
     // Run cron runner
     let mut runner = Runner::new();
@@ -142,10 +211,10 @@ async fn main() -> Result<()> {
                 CoreMessage::StartGofer(triggers_announcer) => {
                     let _ = start_gofer(
                         &mut handles,
-                                database_arc.clone(),
-                                sender.clone(),
-                                targets.clone(),
-                                triggers_announcer,
+                        database_arc.clone(),
+                        sender.clone(),
+                        targets.clone(),
+                        triggers_announcer,
                     );
                 }
                 CoreMessage::GoferFinished(triggers_announcer) => {
@@ -167,8 +236,8 @@ async fn main() -> Result<()> {
                 CoreMessage::StartAnnouncer => {
                     let _ = start_announcer(
                         &mut handles,
-                            database_arc.clone(),
-                            sender.clone(),
+                        database_arc.clone(),
+                        sender.clone(),
                         discord_http.clone(),
                         None,
                     );
@@ -179,8 +248,8 @@ async fn main() -> Result<()> {
                 CoreMessage::StartSoloAnnouncer(server) => {
                     let _ = start_announcer(
                         &mut handles,
-                            database_arc.clone(),
-                            sender.clone(),
+                        database_arc.clone(),
+                        sender.clone(),
                         discord_http.clone(),
                         Some(server),
                     );
@@ -191,9 +260,9 @@ async fn main() -> Result<()> {
                 CoreMessage::StartDiscordBot => {
                     let _ = start_discord_bot(
                         &mut handles,
-                                database_arc.clone(),
-                                sender.clone(),
-                                token.clone(),
+                        database_arc.clone(),
+                        sender.clone(),
+                        token.clone(),
                     );
                 }
                 CoreMessage::TransferDiscordHttp(http) => {
