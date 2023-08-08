@@ -11,12 +11,7 @@ use discord::{connect_discord, disconnect_discord};
 use gofer::dispatch_gofers;
 use poise::serenity_prelude::Http;
 use structs::{Server, Target};
-use tokio::{
-    spawn,
-    sync::Mutex,
-    task::JoinHandle,
-    time::{sleep, Duration},
-};
+use tokio::{sync::Mutex, task::JoinSet, time::Duration};
 
 mod announcer;
 mod config;
@@ -30,11 +25,8 @@ mod utils;
 /// Enum of message types that will be sent from spawned threads back to the main thread.
 pub enum CoreMessage {
     StartGofer(bool),
-    GoferFinished(bool),
     StartAnnouncer,
-    AnnouncerFinished,
     StartSoloAnnouncer(Server),
-    SoloAnnouncerFinished(Server),
     StartDiscordBot,
     TransferDiscordHttp(Arc<Http>),
     Quit,
@@ -42,7 +34,7 @@ pub enum CoreMessage {
 
 /// Types of workers.
 #[derive(PartialEq, Clone)]
-enum Worker {
+pub enum Worker {
     Gofer,
     Announcer,
     SoloAnnouncer(Server),
@@ -51,17 +43,13 @@ enum Worker {
 
 impl std::fmt::Display for Worker {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Worker::Gofer => format!("Gofer"),
-                Worker::Announcer => format!("Announcer"),
-                Worker::SoloAnnouncer(server) =>
-                    format!("Solo Announcer for {}", server.identifier),
-                Worker::DiscordBot => format!("Discord Bot"),
-            }
-        )
+        let str = match self {
+            Worker::Gofer => format!("Gofer"),
+            Worker::Announcer => format!("Announcer"),
+            Worker::SoloAnnouncer(server) => format!("Solo Announcer for {}", server.identifier),
+            Worker::DiscordBot => format!("Discord Bot"),
+        };
+        write!(f, "{}", str)
     }
 }
 
@@ -88,9 +76,6 @@ impl Job for WorkerCron {
     }
 }
 
-/// A vector of Worker and JoinHandle tuples.
-type WorkerHandles = Vec<(Worker, JoinHandle<Result<()>>)>;
-
 struct Flags {
     one_shot: bool,
 }
@@ -100,6 +85,8 @@ impl Default for Flags {
         Self { one_shot: false }
     }
 }
+
+type Handle = (Worker, Result<()>);
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -131,14 +118,28 @@ async fn main() -> Result<()> {
         crossbeam::channel::unbounded();
 
     // Setup vector of processes to keep track what is running
-    let mut handles: Vec<(Worker, JoinHandle<Result<()>>)> = vec![];
+    let mut tracker: Vec<Worker> = vec![];
+    let mut handles: JoinSet<Handle> = JoinSet::new();
 
     // Setup memory storage for Discord API
     let mut discord_http: Option<Arc<Http>> = None;
 
     // Run workers sequentially and terminate if one-shot flag is true
     if flags.one_shot {
-        execute_one_shot(handles, database_arc, sender, receiver, token, targets).await?;
+        let exec = execute_one_shot(
+            tracker,
+            handles,
+            database_arc,
+            sender,
+            receiver,
+            token,
+            targets,
+        )
+        .await;
+        if let Err(error) = exec {
+            log!("{} One-shot execution failed: {}", "[CORE]".blue(), error);
+            return Err(error);
+        }
         return Ok(());
     }
 
@@ -162,6 +163,8 @@ async fn main() -> Result<()> {
     // Start-on-run toggle
     let mut boot = true;
 
+    let mut trigger_announcer_on_gofer_finish = false;
+
     loop {
         if boot {
             sender.send(CoreMessage::StartGofer(true))?;
@@ -169,71 +172,86 @@ async fn main() -> Result<()> {
             boot = false;
         }
 
-        if let Ok(message) = receiver.recv() {
-            match message {
-                CoreMessage::StartGofer(triggers_announcer) => {
-                    let _ = start_gofer(
-                        &mut handles,
-                        database_arc.clone(),
-                        sender.clone(),
-                        targets.clone(),
-                        triggers_announcer,
-                    );
+        tokio::select! { biased;
+            Some(finished_handle) = handles.join_next() => {
+                // Continue on JoinError
+                if let Err(join_error) = finished_handle {
+                    log!("{} JoinError: {}.", "[CORE]".blue(), join_error);
+                    continue;
                 }
-                CoreMessage::GoferFinished(triggers_announcer) => {
-                    let _ = remove_worker_handle(&mut handles, &Worker::Gofer);
+                let finished_handle = finished_handle.unwrap();
 
-                    if triggers_announcer {
-                        // Spawn another thread to wait a little and trigger announcer
-                        let cloned_discord_http = discord_http.clone();
-                        let cloned_sender = sender.clone();
-                        spawn(async move {
-                            sleep(Duration::from_millis(2500)).await;
+                // Remove from tracker
+                let worker = finished_handle.0;
+                if let Err(error) = remove_tracker(&mut tracker, &worker) {
+                    log!("{} Error removing tracker: {}.", "[CORE]".blue(), error);
+                }
 
-                            if cloned_discord_http.is_some() {
-                                cloned_sender.send(CoreMessage::StartAnnouncer).unwrap();
-                            }
-                        });
+                // Trigger Announcer if flag is true
+                if worker == Worker::Gofer && trigger_announcer_on_gofer_finish {
+                    trigger_announcer_on_gofer_finish = false;
+                    sender.send(CoreMessage::StartAnnouncer)?
+                }
+
+                // Attempt restart if Discord Bot
+                if worker == Worker::DiscordBot {
+                    discord_http = None;
+                    sender.send(CoreMessage::StartDiscordBot)?;
+                }
+            }
+
+            message = async { receiver.try_recv() } => {
+                // If no message, sleep for 100ms and continue loop
+                if message.is_err() {
+                    std::thread::sleep(Duration::from_millis(100));
+                    continue;
+                }
+
+                match message.unwrap() {
+                    CoreMessage::StartGofer(triggers_announcer) => {
+                        start_gofer(
+                            &mut tracker,
+                            &mut handles,
+                            database_arc.clone(),
+                            targets.clone(),
+                        )?;
+
+                        trigger_announcer_on_gofer_finish = triggers_announcer;
                     }
-                }
-                CoreMessage::StartAnnouncer => {
-                    let _ = start_announcer(
-                        &mut handles,
-                        database_arc.clone(),
-                        sender.clone(),
-                        discord_http.clone(),
-                        None,
-                    );
-                }
-                CoreMessage::AnnouncerFinished => {
-                    let _ = remove_worker_handle(&mut handles, &Worker::Announcer);
-                }
-                CoreMessage::StartSoloAnnouncer(server) => {
-                    let _ = start_announcer(
-                        &mut handles,
-                        database_arc.clone(),
-                        sender.clone(),
-                        discord_http.clone(),
-                        Some(server),
-                    );
-                }
-                CoreMessage::SoloAnnouncerFinished(server) => {
-                    let _ = remove_worker_handle(&mut handles, &Worker::SoloAnnouncer(server));
-                }
-                CoreMessage::StartDiscordBot => {
-                    let _ = start_discord_bot(
-                        &mut handles,
-                        database_arc.clone(),
-                        sender.clone(),
-                        token.clone(),
-                    );
-                }
-                CoreMessage::TransferDiscordHttp(http) => {
-                    discord_http = Some(http);
-                    log!("{} Discord API received.", "[CORE]".blue());
-                }
-                CoreMessage::Quit => {
-                    break;
+                    CoreMessage::StartAnnouncer => {
+                        start_announcer(
+                            &mut tracker,
+                            &mut handles,
+                            database_arc.clone(),
+                            discord_http.clone(),
+                            None,
+                        )?;
+                    }
+                    CoreMessage::StartSoloAnnouncer(server) => {
+                        start_announcer(
+                            &mut tracker,
+                            &mut handles,
+                            database_arc.clone(),
+                            discord_http.clone(),
+                            Some(server),
+                        )?;
+                    }
+                    CoreMessage::StartDiscordBot => {
+                        start_discord_bot(
+                            &mut tracker,
+                            &mut handles,
+                            database_arc.clone(),
+                            sender.clone(),
+                            token.clone(),
+                        )?;
+                    }
+                    CoreMessage::TransferDiscordHttp(http) => {
+                        discord_http = Some(http);
+                        log!("{} Discord API received.", "[CORE]".blue());
+                    }
+                    CoreMessage::Quit => {
+                        break;
+                    }
                 }
             }
         }
@@ -241,35 +259,25 @@ async fn main() -> Result<()> {
 
     runner.stop();
 
-    for handle in handles {
-        match handle.0 {
-            Worker::Gofer | Worker::Announcer | Worker::SoloAnnouncer(_) => {
-                handle.1.abort();
-                log!("{} {} handle aborted.", "[CORE]".blue(), handle.0);
-            }
-            Worker::DiscordBot => {
-                if discord_http.as_ref().is_some() {
-                    let _ = disconnect_discord(discord_http.as_ref().unwrap()).await;
-                }
-                handle.1.abort();
-                log!("{} {} handle aborted.", "[CORE]".blue(), Worker::DiscordBot);
-            }
-        };
+    handles.abort_all();
+    while let Some(_) = handles.join_next().await {
+        // Loop until all handles have aborted
+    }
+
+    if tracker.contains(&Worker::DiscordBot) {
+        disconnect_discord(discord_http.as_ref().unwrap()).await?;
     }
 
     log!("{} Goodbye!", "[CORE]".blue());
     Ok(())
 }
 
-/// Checks whether a worker already exists in the handle or not.
+/// Checks whether a worker already exists in the tracker or not.
 /// This is to keep the core control from starting multiple instances of the same worker.
 /// The function returns the index wrapped in `Some` if it does, and `None` if it does not.
-fn get_worker_index(
-    handles: &Vec<(Worker, JoinHandle<Result<()>>)>,
-    what: &Worker,
-) -> Option<usize> {
-    for (index, handle) in handles.iter().enumerate() {
-        if handle.0 == *what {
+fn get_tracker_index(tracker: &Vec<Worker>, find: &Worker) -> Option<usize> {
+    for (index, worker) in tracker.iter().enumerate() {
+        if *worker == *find {
             return Some(index);
         }
     }
@@ -277,42 +285,42 @@ fn get_worker_index(
     None
 }
 
-/// Remove a worker from the handle list if it does exist in it.
-fn remove_worker_handle(handles: &mut WorkerHandles, what: &Worker) -> Result<Option<usize>> {
-    let index = get_worker_index(&handles, what);
+/// Add a worker to the tracker.
+fn add_tracker(tracker: &mut Vec<Worker>, worker: Worker) -> Result<()> {
+    tracker.push(worker);
+
+    Ok(())
+}
+
+/// Remove a worker from the tracker if it does exist in it.
+fn remove_tracker(tracker: &mut Vec<Worker>, worker: &Worker) -> Result<Option<usize>> {
+    let index = get_tracker_index(&tracker, worker);
     if index.is_none() {
         return Ok(None);
     }
 
-    handles.remove(index.unwrap());
-    log!("{} Removed {} handle.", "[CORE]".blue(), what);
+    tracker.remove(index.unwrap());
 
     Ok(index)
 }
 
 /// Starts the Discord Bot worker and registers it into the handle list.
 fn start_discord_bot(
-    handles: &mut WorkerHandles,
+    tracker: &mut Vec<Worker>,
+    handles: &mut JoinSet<Handle>,
     database_arc: Arc<Mutex<dyn Database>>,
     sender: Sender<CoreMessage>,
     token: String,
 ) -> Result<()> {
-    if get_worker_index(handles, &Worker::DiscordBot).is_some() {
+    if get_tracker_index(tracker, &Worker::DiscordBot).is_some() {
         bail!("Discord Bot is already running.");
     }
 
-    log!(
-        "{} Tracking {} handle.",
-        "[CORE]".blue(),
-        Worker::DiscordBot,
-    );
-    handles.push((
-        Worker::DiscordBot,
-        spawn(connect_discord(
-            database_arc.clone(),
-            sender.clone(),
-            token.clone(),
-        )),
+    add_tracker(tracker, Worker::DiscordBot)?;
+    handles.spawn(connect_discord(
+        database_arc.clone(),
+        sender.clone(),
+        token.clone(),
     ));
 
     Ok(())
@@ -320,35 +328,26 @@ fn start_discord_bot(
 
 /// Starts the Gofer worker and registers it into the handle list.
 fn start_gofer(
-    handles: &mut WorkerHandles,
+    tracker: &mut Vec<Worker>,
+    handles: &mut JoinSet<Handle>,
     database_arc: Arc<Mutex<dyn Database>>,
-    sender: Sender<CoreMessage>,
     targets: Vec<Target>,
-    triggers_announcer: bool,
 ) -> Result<()> {
-    if get_worker_index(&handles, &Worker::Gofer).is_some() {
+    if get_tracker_index(&tracker, &Worker::Gofer).is_some() {
         bail!("Gofer is already running.");
     }
 
-    handles.push((
-        Worker::Gofer,
-        spawn(dispatch_gofers(
-            database_arc.clone(),
-            sender.clone(),
-            targets.clone(),
-            triggers_announcer,
-        )),
-    ));
-    log!("{} Tracking {} handle.", "[CORE]".blue(), Worker::Gofer);
+    add_tracker(tracker, Worker::Gofer)?;
+    handles.spawn(dispatch_gofers(database_arc.clone(), targets.clone()));
 
     Ok(())
 }
 
 /// Starts the Announcer worker and registers it into the handle list.
 fn start_announcer(
-    handles: &mut WorkerHandles,
+    tracker: &mut Vec<Worker>,
+    handles: &mut JoinSet<Handle>,
     database_arc: Arc<Mutex<dyn Database>>,
-    sender: Sender<CoreMessage>,
     discord_http: Option<Arc<Http>>,
     server: Option<Server>,
 ) -> Result<()> {
@@ -365,36 +364,28 @@ fn start_announcer(
         );
         bail!("Discord API has not been received by core control.");
     }
-    if worker == Worker::Announcer && get_worker_index(&handles, &Worker::Announcer).is_some() {
+    if get_tracker_index(&tracker, &worker).is_some() {
         bail!("Announcer is already running.");
     }
 
     let discord_http = discord_http.unwrap();
 
-    let handle = match worker.clone() {
-        Worker::Announcer => (
-            Worker::Announcer,
-            spawn(dispatch_announcer(database_arc, discord_http, sender)),
-        ),
-        Worker::SoloAnnouncer(server) => (
-            Worker::SoloAnnouncer(server.clone()),
-            spawn(dispatch_solo_announcer(
-                database_arc,
-                discord_http,
-                sender,
-                server,
-            )),
-        ),
+    match worker.clone() {
+        Worker::Announcer => handles.spawn(dispatch_announcer(database_arc, discord_http)),
+        Worker::SoloAnnouncer(server) => {
+            handles.spawn(dispatch_solo_announcer(database_arc, discord_http, server))
+        }
         _ => bail!("Invalid match on worker type check."),
     };
-    handles.push(handle);
-    log!("{} Tracking {} handle.", "[CORE]".blue(), worker);
+    add_tracker(tracker, worker.clone())?;
 
     Ok(())
 }
 
+/// Executes the workers in sequence.
 async fn execute_one_shot(
-    handles: WorkerHandles,
+    tracker: Vec<Worker>,
+    handles: JoinSet<Handle>,
     database_arc: Arc<Mutex<dyn Database>>,
     sender: Sender<CoreMessage>,
     receiver: Receiver<CoreMessage>,
@@ -402,82 +393,98 @@ async fn execute_one_shot(
     targets: Vec<Target>,
 ) -> Result<()> {
     // Declare/take ownership of variables
+    let mut tracker = tracker;
     let mut handles = handles;
     let discord_http;
 
     // Start Discord bot
-    let start_discord_bot = start_discord_bot(
+    start_discord_bot(
+        &mut tracker,
         &mut handles,
         database_arc.clone(),
         sender.clone(),
         token.clone(),
-    );
-    if start_discord_bot.is_err() {
-        bail!(
-            "one-shot: Start Discord Bot: {}",
-            start_discord_bot.unwrap_err()
-        );
-    }
+    )?;
+
     loop {
         // Await for Discord API
-        let message = receiver.recv()?;
-        match message {
-            CoreMessage::TransferDiscordHttp(api) => {
-                discord_http = Some(api);
-                break;
+        tokio::select! {
+            message = async { receiver.try_recv() } => {
+                if message.is_err() {
+                    continue;
+                }
+                let message = message.unwrap();
+                match message {
+                    CoreMessage::TransferDiscordHttp(api) => {
+                        discord_http = Some(api);
+                        break;
+                    }
+                _ => continue,
+                }
             }
-            _ => continue,
+
+            Some(finished_handle) = handles.join_next() => {
+                // Bail on JoinError
+                if let Err(join_error) = finished_handle {
+                    bail!("JoinError: {}", join_error);
+                }
+
+                // Bail since Discord Bot is dead anyway
+                let finished_handle = finished_handle.unwrap();
+                match finished_handle.1 {
+                    Ok(_) => bail!("Discord thread exited"),
+                    Err(error) => bail!(error),
+                }
+            }
         }
+    }
+
+    #[macro_export]
+    macro_rules! await_handle {
+        ($($arg: tt)*) => {
+            while let Some(finished_handle) = handles.join_next().await {
+                // Continue on JoinError
+                if let Err(join_error) = finished_handle {
+                    log!("{} JoinError: {}.", "[CORE]".blue(), join_error);
+                    bail!(join_error);
+                }
+                let finished_handle = finished_handle.unwrap();
+
+                // If worker is the same, break
+                let worker = finished_handle.0;
+                if worker == $($arg)* {
+                    break;
+                }
+
+                // If DiscordBot thread ended, bail
+                if worker == Worker::DiscordBot {
+                    bail!("Discord Bot process ended.");
+                }
+            }
+        };
     }
 
     // Start Gofer
-    let start_gofer = start_gofer(
+    start_gofer(
+        &mut tracker,
         &mut handles,
         database_arc.clone(),
-        sender.clone(),
         targets.clone(),
-        true,
-    );
-    if start_gofer.is_err() {
-        bail!("one-shot: Start Gofer: {}", start_gofer.unwrap_err());
-    }
-    loop {
-        // Await for Gofer to finish
-        let message = receiver.recv()?;
-        match message {
-            CoreMessage::GoferFinished(_) => break,
-            _ => continue,
-        }
-    }
+    )?;
+    await_handle!(Worker::Gofer);
 
     // Start Announcer
-    let start_announcer = start_announcer(
+    start_announcer(
+        &mut tracker,
         &mut handles,
         database_arc.clone(),
-        sender.clone(),
         discord_http.clone(),
         None,
-    );
-    if start_announcer.is_err() {
-        bail!(
-            "one-shot: Start Announcer: {}",
-            start_announcer.unwrap_err()
-        );
-    }
-    loop {
-        // Await for Announcer to finish
-        let message = receiver.recv()?;
-        match message {
-            CoreMessage::AnnouncerFinished => break,
-            _ => continue,
-        }
-    }
+    )?;
+    await_handle!(Worker::Announcer);
 
     // Disconnect Discord
-    let disconnect = disconnect_discord(discord_http.as_ref().unwrap()).await;
-    if disconnect.is_err() {
-        bail!("one-shot: Disconnect Discord: {}", disconnect.unwrap_err());
-    }
+    disconnect_discord(discord_http.as_ref().unwrap()).await?;
 
     log!(
         "{} One-shot execution finished. Terminating.",

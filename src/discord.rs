@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use colored::Colorize;
 use crossbeam::channel::Sender;
 use poise::{
@@ -9,7 +9,7 @@ use poise::{
 };
 use tokio::sync::Mutex;
 
-use crate::{database::database::Database, log, structs::Chapter, CoreMessage};
+use crate::{database::database::Database, log, structs::Chapter, CoreMessage, Worker};
 struct Data {
     sender: Sender<CoreMessage>,
     database: Arc<Mutex<dyn Database>>,
@@ -22,7 +22,7 @@ pub async fn connect_discord(
     database: Arc<Mutex<dyn Database>>,
     sender: Sender<CoreMessage>,
     token: String,
-) -> Result<()> {
+) -> (Worker, Result<()>) {
     log!("{} Connecting to Discord...", "[DSCD]".magenta());
 
     let framework: FrameworkBuilder<Data, PoiseError> = Framework::builder()
@@ -56,9 +56,12 @@ pub async fn connect_discord(
             })
         });
 
-    framework.run().await?;
+    let run = framework.run().await;
+    if let Err(error) = run {
+        return (Worker::DiscordBot, Err(anyhow!(error)));
+    }
 
-    Ok(())
+    (Worker::DiscordBot, Ok(()))
 }
 
 /// Manually trigger the fetch process for new chapters.

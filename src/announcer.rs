@@ -1,18 +1,17 @@
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use chrono::Utc;
 use colored::Colorize;
-use crossbeam::channel::Sender;
 use serenity::http::Http;
-use tokio::{spawn, sync::Mutex};
+use tokio::{sync::Mutex, task::JoinSet};
 
 use crate::{
     database::database::Database,
     discord::{get_channel_id, send_chapters},
     log,
     structs::Server,
-    CoreMessage,
+    Worker,
 };
 
 /// Spawns one thread for each registered Server,
@@ -20,36 +19,39 @@ use crate::{
 pub async fn dispatch_announcer(
     database: Arc<Mutex<dyn Database>>,
     discord_http: Arc<Http>,
-    sender: Sender<CoreMessage>,
-) -> Result<()> {
+) -> (Worker, Result<()>) {
     log!("{} Dispatching Announcer...", "[ANNO]".red());
 
-    let servers = database.lock().await.get_servers()?;
+    let servers = {
+        let database_access = database.lock().await;
+        database_access.get_servers()
+    };
+    if let Err(error) = servers {
+        return (Worker::Announcer, Err(anyhow!(error)));
+    }
+    let servers = servers.unwrap();
 
-    let mut handles = Vec::with_capacity(servers.len());
+    let mut handles = JoinSet::new();
 
     for server in servers {
         let cloned_db = database.clone();
         let cloned_discord_http = discord_http.clone();
-        let handle = spawn(announce_for_server(cloned_db, cloned_discord_http, server));
-        handles.push(handle);
+        handles.spawn(announce_for_server(cloned_db, cloned_discord_http, server));
     }
 
-    for handle in handles {
-        let _ = handle.await?;
+    while let Some(_) = handles.join_next().await {
+        // Loop until all handles have finished
     }
 
     log!("{} Announcer has finished.", "[ANNO]".red());
-    let _ = sender.send(CoreMessage::AnnouncerFinished)?;
-    Ok(())
+    (Worker::Announcer, Ok(()))
 }
 
 pub async fn dispatch_solo_announcer(
     database: Arc<Mutex<dyn Database>>,
     discord_http: Arc<Http>,
-    sender: Sender<CoreMessage>,
     server: Server,
-) -> Result<()> {
+) -> (Worker, Result<()>) {
     log!(
         "{} Dispatching Solo Announcer for {}...",
         "[ANNO]".red(),
@@ -58,22 +60,24 @@ pub async fn dispatch_solo_announcer(
 
     let announce = announce_for_server(database, discord_http, server.clone()).await;
 
-    if announce.is_ok() {
-        log!(
+    match announce {
+        Ok(_) => log!(
             "{} Solo Announcer for {} has finished.",
             "[ANNO]".red(),
             server.identifier,
-        );
-    } else {
-        log!(
-            "{} Solo Announcer for {} failed.",
-            "[ANNO]".red(),
-            server.identifier,
-        );
+        ),
+        Err(error) => {
+            log!(
+                "{} Solo Announcer for {} failed: {}.",
+                "[ANNO]".red(),
+                server.identifier,
+                error,
+            );
+            return (Worker::SoloAnnouncer(server), Err(anyhow!(error)));
+        }
     }
 
-    let _ = sender.send(CoreMessage::SoloAnnouncerFinished(server))?;
-    Ok(())
+    (Worker::SoloAnnouncer(server), Ok(()))
 }
 
 /// Child process of `dispatch_announcer`.

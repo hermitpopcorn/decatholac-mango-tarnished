@@ -2,16 +2,15 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
 use colored::Colorize;
-use crossbeam::channel::Sender;
 use reqwest::Client;
-use tokio::{sync::Mutex, task::spawn};
+use tokio::{sync::Mutex, task::JoinSet};
 
 use crate::{
     database::database::Database,
     log,
     parsers::{html::parse_html, json::parse_json, rss::parse_rss},
     structs::{Chapter, ParseMode, Target},
-    CoreMessage,
+    Worker,
 };
 
 /// Spawns one thread for each Target,
@@ -19,27 +18,23 @@ use crate::{
 /// If there are new Chapters, saves them to the database.
 pub async fn dispatch_gofers(
     database: Arc<Mutex<dyn Database>>,
-    sender: Sender<CoreMessage>,
     targets: Vec<Target>,
-    triggers_announcer: bool,
-) -> Result<()> {
+) -> (Worker, Result<()>) {
     log!("{} Dispatching Gofers...", "[GOFR]".green());
 
-    let mut handles = Vec::with_capacity(targets.len());
+    let mut handles = JoinSet::new();
 
     for target in targets {
         let cloned_db_ref = database.clone();
-        let handle = spawn(run_gofer(cloned_db_ref, target.clone()));
-        handles.push(handle);
+        handles.spawn(run_gofer(cloned_db_ref, target.clone()));
     }
 
-    for handle in handles {
-        let _ = handle.await;
+    while let Some(_) = handles.join_next().await {
+        // Loop until all handles have finished
     }
 
     log!("{} All Gofers have returned.", "[GOFR]".green());
-    let _ = sender.send(CoreMessage::GoferFinished(triggers_announcer))?;
-    Ok(())
+    (Worker::Gofer, Ok(()))
 }
 
 /// Child process of `dispatch_gofers`.
