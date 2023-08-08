@@ -138,44 +138,7 @@ async fn main() -> Result<()> {
 
     // Run workers sequentially and terminate if one-shot flag is true
     if flags.one_shot {
-        start_discord_bot(
-            &mut handles,
-            database_arc.clone(),
-            sender.clone(),
-            token.clone(),
-        )
-        .expect("one-shot: Start Discord Bot");
-        let message = receiver.recv()?; // Await for Discord API
-        match message {
-            CoreMessage::TransferDiscordHttp(api) => discord_http = Some(api),
-            _ => panic!("Unexpected response"),
-        }
-        start_gofer(
-            &mut handles,
-            database_arc.clone(),
-            sender.clone(),
-            targets.clone(),
-            true,
-        )
-        .expect("one-shot: Start Gofer");
-        receiver.recv()?; // Await for Gofer to finish
-        start_announcer(
-            &mut handles,
-            database_arc.clone(),
-            sender.clone(),
-            discord_http.clone(),
-            None,
-        )
-        .expect("one-shot: Start Announcer");
-        receiver.recv()?; // Await for Announcer to finish
-        disconnect_discord(discord_http.as_ref().unwrap())
-            .await
-            .expect("one-shot: Disconnect Discord");
-
-        log!(
-            "{} One-shot execution finished. Terminating.",
-            "[CORE]".blue()
-        );
+        execute_one_shot(handles, database_arc, sender, receiver, token, targets).await?;
         return Ok(());
     }
 
@@ -201,8 +164,8 @@ async fn main() -> Result<()> {
 
     loop {
         if boot {
-            let _ = sender.send(CoreMessage::StartGofer(true))?;
-            let _ = sender.send(CoreMessage::StartDiscordBot)?;
+            sender.send(CoreMessage::StartGofer(true))?;
+            sender.send(CoreMessage::StartDiscordBot)?;
             boot = false;
         }
 
@@ -426,6 +389,100 @@ fn start_announcer(
     };
     handles.push(handle);
     log!("{} Tracking {} handle.", "[CORE]".blue(), worker);
+
+    Ok(())
+}
+
+async fn execute_one_shot(
+    handles: WorkerHandles,
+    database_arc: Arc<Mutex<dyn Database>>,
+    sender: Sender<CoreMessage>,
+    receiver: Receiver<CoreMessage>,
+    token: String,
+    targets: Vec<Target>,
+) -> Result<()> {
+    // Declare/take ownership of variables
+    let mut handles = handles;
+    let discord_http;
+
+    // Start Discord bot
+    let start_discord_bot = start_discord_bot(
+        &mut handles,
+        database_arc.clone(),
+        sender.clone(),
+        token.clone(),
+    );
+    if start_discord_bot.is_err() {
+        bail!(
+            "one-shot: Start Discord Bot: {}",
+            start_discord_bot.unwrap_err()
+        );
+    }
+    loop {
+        // Await for Discord API
+        let message = receiver.recv()?;
+        match message {
+            CoreMessage::TransferDiscordHttp(api) => {
+                discord_http = Some(api);
+                break;
+            }
+            _ => continue,
+        }
+    }
+
+    // Start Gofer
+    let start_gofer = start_gofer(
+        &mut handles,
+        database_arc.clone(),
+        sender.clone(),
+        targets.clone(),
+        true,
+    );
+    if start_gofer.is_err() {
+        bail!("one-shot: Start Gofer: {}", start_gofer.unwrap_err());
+    }
+    loop {
+        // Await for Gofer to finish
+        let message = receiver.recv()?;
+        match message {
+            CoreMessage::GoferFinished(_) => break,
+            _ => continue,
+        }
+    }
+
+    // Start Announcer
+    let start_announcer = start_announcer(
+        &mut handles,
+        database_arc.clone(),
+        sender.clone(),
+        discord_http.clone(),
+        None,
+    );
+    if start_announcer.is_err() {
+        bail!(
+            "one-shot: Start Announcer: {}",
+            start_announcer.unwrap_err()
+        );
+    }
+    loop {
+        // Await for Announcer to finish
+        let message = receiver.recv()?;
+        match message {
+            CoreMessage::AnnouncerFinished => break,
+            _ => continue,
+        }
+    }
+
+    // Disconnect Discord
+    let disconnect = disconnect_discord(discord_http.as_ref().unwrap()).await;
+    if disconnect.is_err() {
+        bail!("one-shot: Disconnect Discord: {}", disconnect.unwrap_err());
+    }
+
+    log!(
+        "{} One-shot execution finished. Terminating.",
+        "[CORE]".blue()
+    );
 
     Ok(())
 }
