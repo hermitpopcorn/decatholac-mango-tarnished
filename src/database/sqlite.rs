@@ -47,7 +47,7 @@ impl Database for SqliteDatabase {
                     'url'         VARCHAR(255) NOT NULL,
                     'date'        DATETIME NOT NULL,
                     'loggedAt'    DATETIME NOT NULL,
-                    'announcedAt' DATETIME,
+                    'announcedAt' DATETIME NOT NULL,
                     PRIMARY KEY('id' AUTOINCREMENT)
                 )",
                 [],
