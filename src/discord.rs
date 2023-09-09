@@ -7,19 +7,18 @@ use poise::{
     serenity_prelude::{self as serenity, ChannelId, Http},
     Framework, FrameworkBuilder,
 };
-use tokio::sync::Mutex;
 
 use crate::{database::database::Database, log, structs::Chapter, CoreMessage, Worker};
 struct Data {
     sender: Sender<CoreMessage>,
-    database: Arc<Mutex<dyn Database>>,
+    database: Arc<dyn Database>,
 }
 type PoiseError = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, Data, PoiseError>;
 
 /// Connects to Discord and initializes the bot, setting up commands, etc.
 pub async fn connect_discord(
-    database: Arc<Mutex<dyn Database>>,
+    database: Arc<dyn Database>,
     sender: Sender<CoreMessage>,
     token: String,
 ) -> (Worker, Result<()>) {
@@ -78,8 +77,8 @@ async fn trigger_start_announcer(ctx: Context<'_>) -> Result<(), PoiseError> {
     let guild_id = ctx.guild_id().expect("Could not get Guild ID.");
     let guild_id = guild_id.to_string();
 
-    let db = ctx.data().database.lock().await;
-    let server = db.get_server(guild_id.as_str())?;
+    let db = &ctx.data().database;
+    let server = db.get_server(guild_id.as_str()).await?;
 
     let _ = ctx
         .data()
@@ -106,11 +105,12 @@ async fn set_as_feed_channel(ctx: Context<'_>) -> Result<(), PoiseError> {
     let guild_id = guild_id.unwrap();
     let channel_id = ctx.channel_id();
 
-    let db = ctx.data().database.lock().await;
+    let db = &ctx.data().database;
     db.set_feed_channel(
         guild_id.to_string().as_str(),
         channel_id.to_string().as_str(),
-    )?;
+    )
+    .await?;
 
     ctx.say("This channel has been set as the feed channel.")
         .await?;

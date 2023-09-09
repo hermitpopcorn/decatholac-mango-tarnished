@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use chrono::Utc;
 use colored::Colorize;
 use serenity::http::Http;
-use tokio::{sync::Mutex, task::JoinSet};
+use tokio::task::JoinSet;
 
 use crate::{
     database::database::Database,
@@ -17,15 +17,12 @@ use crate::{
 /// Spawns one thread for each registered Server,
 /// sending information on chapters that haven't been announced on that Server.
 pub async fn dispatch_announcer(
-    database: Arc<Mutex<dyn Database>>,
+    database: Arc<dyn Database>,
     discord_http: Arc<Http>,
 ) -> (Worker, Result<()>) {
     log!("{} Dispatching Announcer...", "[ANNO]".red());
 
-    let servers = {
-        let database_access = database.lock().await;
-        database_access.get_servers()
-    };
+    let servers = database.get_servers().await;
     if let Err(error) = servers {
         return (Worker::Announcer, Err(anyhow!(error)));
     }
@@ -48,7 +45,7 @@ pub async fn dispatch_announcer(
 }
 
 pub async fn dispatch_solo_announcer(
-    database: Arc<Mutex<dyn Database>>,
+    database: Arc<dyn Database>,
     discord_http: Arc<Http>,
     server: Server,
 ) -> (Worker, Result<()>) {
@@ -83,12 +80,13 @@ pub async fn dispatch_solo_announcer(
 /// Child process of `dispatch_announcer`.
 /// This function gets run for every thread.
 async fn announce_for_server(
-    database: Arc<Mutex<dyn Database>>,
+    database: Arc<dyn Database>,
     discord_http: Arc<Http>,
     server: Server,
 ) -> Result<()> {
-    let db_access = database.lock().await;
-    let is_announcing = db_access.get_announcing_server_flag(&server.identifier)?;
+    let is_announcing = database
+        .get_announcing_server_flag(&server.identifier)
+        .await?;
     if is_announcing {
         log!(
             "{} Skipping Server {} to prevent announcement conflicts.",
@@ -97,9 +95,13 @@ async fn announce_for_server(
         );
         return Ok(());
     }
-    db_access.set_announcing_server_flag(&server.identifier, true)?;
+    database
+        .set_announcing_server_flag(&server.identifier, true)
+        .await?;
 
-    let chapters = db_access.get_unnanounced_chapters(&server.identifier)?;
+    let chapters = database
+        .get_unnanounced_chapters(&server.identifier)
+        .await?;
     if chapters.len() > 0 {
         log!(
             "{} Announcing {} chapters for Server {}...",
@@ -110,7 +112,9 @@ async fn announce_for_server(
 
         let channel = get_channel_id(&server.feed_channel_identifier)?;
         send_chapters(discord_http.as_ref(), channel, chapters).await?;
-        db_access.set_last_announced_time(&server.identifier, &Utc::now())?;
+        database
+            .set_last_announced_time(&server.identifier, &Utc::now())
+            .await?;
     } else {
         log!(
             "{} No new chapters for Server {}.",
@@ -119,7 +123,9 @@ async fn announce_for_server(
         );
     }
 
-    db_access.set_announcing_server_flag(&server.identifier, false)?;
+    database
+        .set_announcing_server_flag(&server.identifier, false)
+        .await?;
 
     Ok(())
 }

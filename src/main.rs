@@ -1,17 +1,17 @@
 use std::sync::Arc;
 
+use crate::database::{database::Database, sqlite::SqliteDatabase};
 use announcer::{dispatch_announcer, dispatch_solo_announcer};
 use anyhow::{bail, Result};
 use colored::Colorize;
 use config::{get_config, get_cron_schedule, get_discord_token, get_targets};
 use crony::{Job, Runner, Schedule};
 use crossbeam::channel::{Receiver, Sender};
-use database::{database::Database, sqlite::SqliteDatabase};
 use discord::{connect_discord, disconnect_discord};
 use gofer::dispatch_gofers;
 use poise::serenity_prelude::Http;
 use structs::{Server, Target};
-use tokio::{sync::Mutex, task::JoinSet, time::Duration};
+use tokio::{task::JoinSet, time::Duration};
 
 mod announcer;
 mod config;
@@ -110,8 +110,8 @@ async fn main() -> Result<()> {
     let cron_schedule = get_cron_schedule(config.get("cron"))?;
 
     // Setup database
-    let database = SqliteDatabase::new("database.db");
-    let database_arc = Arc::new(Mutex::new(database));
+    let database = SqliteDatabase::new("database.db").await;
+    let database_arc = Arc::new(database);
 
     // Setup message channel for processes to communicate to core control (here)
     let (sender, receiver): (Sender<CoreMessage>, Receiver<CoreMessage>) =
@@ -308,7 +308,7 @@ fn remove_tracker(tracker: &mut Vec<Worker>, worker: &Worker) -> Result<Option<u
 fn start_discord_bot(
     tracker: &mut Vec<Worker>,
     handles: &mut JoinSet<Handle>,
-    database_arc: Arc<Mutex<dyn Database>>,
+    database_arc: Arc<dyn Database>,
     sender: Sender<CoreMessage>,
     token: String,
 ) -> Result<()> {
@@ -330,7 +330,7 @@ fn start_discord_bot(
 fn start_gofer(
     tracker: &mut Vec<Worker>,
     handles: &mut JoinSet<Handle>,
-    database_arc: Arc<Mutex<dyn Database>>,
+    database_arc: Arc<dyn Database>,
     targets: Vec<Target>,
 ) -> Result<()> {
     if get_tracker_index(&tracker, &Worker::Gofer).is_some() {
@@ -347,7 +347,7 @@ fn start_gofer(
 fn start_announcer(
     tracker: &mut Vec<Worker>,
     handles: &mut JoinSet<Handle>,
-    database_arc: Arc<Mutex<dyn Database>>,
+    database_arc: Arc<dyn Database>,
     discord_http: Option<Arc<Http>>,
     server: Option<Server>,
 ) -> Result<()> {
@@ -386,7 +386,7 @@ fn start_announcer(
 async fn execute_one_shot(
     tracker: Vec<Worker>,
     handles: JoinSet<Handle>,
-    database_arc: Arc<Mutex<dyn Database>>,
+    database_arc: Arc<dyn Database>,
     sender: Sender<CoreMessage>,
     receiver: Receiver<CoreMessage>,
     token: String,

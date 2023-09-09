@@ -1,9 +1,11 @@
-use std::vec;
+use std::{sync::Arc, vec};
 
 use anyhow::{bail, Result};
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use colored::Colorize;
 use rusqlite::{params, Connection, OptionalExtension};
+use tokio::sync::Mutex;
 
 use crate::{
     log,
@@ -13,32 +15,34 @@ use crate::{
 use super::database::Database;
 
 pub struct SqliteDatabase {
-    connection: Connection,
+    connection: Arc<Mutex<Connection>>,
 }
 
 impl SqliteDatabase {
-    pub fn new(path: &str) -> Self {
+    pub async fn new(path: &str) -> Self {
         let connection = Connection::open(path).unwrap();
 
         let new = Self {
-            connection: connection,
+            connection: Arc::new(Mutex::new(connection)),
         };
-        new.initialize_database().unwrap();
+        new.initialize_database().await.unwrap();
 
         new
     }
 }
 
+#[async_trait]
 impl Database for SqliteDatabase {
-    fn initialize_database(&self) -> Result<()> {
-        let mut statement = self
-            .connection
+    async fn initialize_database(&self) -> Result<()> {
+        let connection = self.connection.lock().await;
+
+        let mut statement = connection
             .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'Chapters'")?;
         let check = statement.query_row([], |_row| Ok(())).optional()?;
 
         if check.is_none() {
             log!("{} Initializing Chapters table...", "[DATA]".yellow());
-            self.connection.execute(
+            connection.execute(
                 "CREATE TABLE 'Chapters' (
                     'id'          INTEGER,
                     'manga'       VARCHAR(255) NOT NULL,
@@ -54,14 +58,13 @@ impl Database for SqliteDatabase {
             )?;
         }
 
-        let mut statement = self
-            .connection
+        let mut statement = connection
             .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'Servers'")?;
         let check = statement.query_row([], |_row| Ok(())).optional()?;
 
         if check.is_none() {
             log!("{} Initializing Servers table...", "[DATA]".yellow());
-            self.connection.execute(
+            connection.execute(
                 "CREATE TABLE 'Servers' (
                     'id'              INTEGER,
                     'guildId'         VARCHAR(255) NOT NULL,
@@ -77,9 +80,11 @@ impl Database for SqliteDatabase {
         Ok(())
     }
 
-    fn save_chapters(&self, chapters: &[Chapter]) -> Result<()> {
+    async fn save_chapters(&self, chapters: &[Chapter]) -> Result<()> {
+        let connection = self.connection.lock().await;
+
         for chapter in chapters {
-            let mut statement = self.connection.prepare(
+            let mut statement = connection.prepare(
                 "SELECT id FROM Chapters WHERE manga = ?1 AND title = ?2 AND number = ?3",
             )?;
             let check = statement
@@ -109,7 +114,7 @@ impl Database for SqliteDatabase {
                     )
                 })(),
             );
-            let mut statement = self.connection.prepare(
+            let mut statement = connection.prepare(
                 "INSERT INTO Chapters
                 (manga, title, number, url, date, loggedAt, announcedAt)
                 VALUES
@@ -129,15 +134,17 @@ impl Database for SqliteDatabase {
         Ok(())
     }
 
-    fn get_unnanounced_chapters(&self, guild_id: &str) -> Result<Vec<Chapter>> {
-        let last_announced_at = match self.get_last_announced_time(guild_id) {
+    async fn get_unnanounced_chapters(&self, guild_id: &str) -> Result<Vec<Chapter>> {
+        let last_announced_at = match self.get_last_announced_time(guild_id).await {
             Ok(time) => time,
             Err(_) => bail!("Could not get last announced time for the Server."),
         };
 
+        let connection = self.connection.lock().await;
+
         let mut chapters = vec![];
 
-        let mut statement = self.connection.prepare(
+        let mut statement = connection.prepare(
             "SELECT manga, title, number, url, date, loggedAt, announcedAt
             FROM Chapters
             WHERE announcedAt > ?1 AND ?2 >= announcedAt
@@ -159,8 +166,8 @@ impl Database for SqliteDatabase {
         Ok(chapters)
     }
 
-    fn get_server(&self, guild_id: &str) -> Result<Server> {
-        let channel_id = self.get_feed_channel(guild_id);
+    async fn get_server(&self, guild_id: &str) -> Result<Server> {
+        let channel_id = self.get_feed_channel(guild_id).await;
 
         if channel_id.is_err() {
             bail!("Feed channel has not been set for this server.")
@@ -172,10 +179,9 @@ impl Database for SqliteDatabase {
         })
     }
 
-    fn get_servers(&self) -> Result<Vec<Server>> {
-        let mut statement = self
-            .connection
-            .prepare("SELECT guildId, channelId FROM Servers")?;
+    async fn get_servers(&self) -> Result<Vec<Server>> {
+        let connection = self.connection.lock().await;
+        let mut statement = connection.prepare("SELECT guildId, channelId FROM Servers")?;
         let mut result = statement.query([])?;
 
         let mut servers = vec![];
@@ -189,14 +195,14 @@ impl Database for SqliteDatabase {
         Ok(servers)
     }
 
-    fn set_feed_channel(&self, guild_id: &str, channel_id: &str) -> Result<()> {
+    async fn set_feed_channel(&self, guild_id: &str, channel_id: &str) -> Result<()> {
         log!(
             "{} Setting new feed channel for Server {}...",
             "[DATA]".yellow(),
             &guild_id
         );
 
-        let currently_set_channel_id = self.get_feed_channel(guild_id);
+        let currently_set_channel_id = self.get_feed_channel(guild_id).await;
 
         if currently_set_channel_id
             .as_ref()
@@ -205,15 +211,16 @@ impl Database for SqliteDatabase {
             return Ok(());
         }
 
+        let connection = self.connection.lock().await;
+
         match currently_set_channel_id {
             Ok(_) => {
-                let mut statement = self
-                    .connection
-                    .prepare("UPDATE Servers SET channelId = ?2 WHERE guildId = ?1")?;
+                let mut statement =
+                    connection.prepare("UPDATE Servers SET channelId = ?2 WHERE guildId = ?1")?;
                 statement.execute(params![guild_id, channel_id])?;
             }
             Err(_) => {
-                let mut statement = self.connection.prepare(
+                let mut statement = connection.prepare(
                     "INSERT INTO Servers (guildId, channelId, lastAnnouncedAt) VALUES (?1, ?2, ?3)",
                 )?;
                 statement.execute(params![guild_id, channel_id, Utc::now()])?;
@@ -223,10 +230,10 @@ impl Database for SqliteDatabase {
         Ok(())
     }
 
-    fn get_feed_channel(&self, guild_id: &str) -> Result<String> {
-        let mut statement = self
-            .connection
-            .prepare("SELECT channelId FROM Servers WHERE guildId = ?1")?;
+    async fn get_feed_channel(&self, guild_id: &str) -> Result<String> {
+        let connection = self.connection.lock().await;
+        let mut statement =
+            connection.prepare("SELECT channelId FROM Servers WHERE guildId = ?1")?;
         let check = statement.query_row(params![guild_id], |row| {
             let row_channel_id: String = row.get(0)?;
             Ok(row_channel_id)
@@ -238,10 +245,10 @@ impl Database for SqliteDatabase {
         }
     }
 
-    fn get_last_announced_time(&self, guild_id: &str) -> Result<DateTime<Utc>> {
-        let mut statement = self
-            .connection
-            .prepare("SELECT lastAnnouncedAt FROM Servers WHERE guildId = ?1")?;
+    async fn get_last_announced_time(&self, guild_id: &str) -> Result<DateTime<Utc>> {
+        let connection = self.connection.lock().await;
+        let mut statement =
+            connection.prepare("SELECT lastAnnouncedAt FROM Servers WHERE guildId = ?1")?;
         let last_announced_at = statement.query_row(params![&guild_id], |row| {
             let row_last_announced_at: DateTime<Utc> = row.get(0)?;
             Ok(row_last_announced_at)
@@ -254,14 +261,14 @@ impl Database for SqliteDatabase {
         Ok(last_announced_at?)
     }
 
-    fn set_last_announced_time(
+    async fn set_last_announced_time(
         &self,
         guild_id: &str,
         last_announced_at: &DateTime<Utc>,
     ) -> Result<()> {
-        let mut statement = self
-            .connection
-            .prepare("UPDATE Servers SET lastAnnouncedAt = ?1 WHERE guildId = ?2")?;
+        let connection = self.connection.lock().await;
+        let mut statement =
+            connection.prepare("UPDATE Servers SET lastAnnouncedAt = ?1 WHERE guildId = ?2")?;
         let result = statement.execute(params![last_announced_at, guild_id])?;
 
         if result < 1 {
@@ -271,10 +278,10 @@ impl Database for SqliteDatabase {
         Ok(())
     }
 
-    fn get_announcing_server_flag(&self, guild_id: &str) -> Result<bool> {
-        let mut statement = self
-            .connection
-            .prepare("SELECT isAnnouncing FROM Servers WHERE guildId = :g")?;
+    async fn get_announcing_server_flag(&self, guild_id: &str) -> Result<bool> {
+        let connection = self.connection.lock().await;
+        let mut statement =
+            connection.prepare("SELECT isAnnouncing FROM Servers WHERE guildId = :g")?;
         let check = statement.query_row(&[(":g", guild_id)], |row| {
             let row_channel_id: bool = row.get(0)?;
             Ok(row_channel_id)
@@ -286,10 +293,10 @@ impl Database for SqliteDatabase {
         };
     }
 
-    fn set_announcing_server_flag(&self, guild_id: &str, announcing: bool) -> Result<()> {
-        let mut statement = self
-            .connection
-            .prepare("UPDATE Servers SET isAnnouncing = :s WHERE guildId = :g")?;
+    async fn set_announcing_server_flag(&self, guild_id: &str, announcing: bool) -> Result<()> {
+        let connection = self.connection.lock().await;
+        let mut statement =
+            connection.prepare("UPDATE Servers SET isAnnouncing = :s WHERE guildId = :g")?;
         let result = statement.execute(&[
             (":g", guild_id),
             (

@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use anyhow::Result;
 use colored::Colorize;
 use reqwest::Client;
-use tokio::{sync::Mutex, task::JoinSet};
+use tokio::task::JoinSet;
 
 use crate::{
     database::database::Database,
@@ -17,7 +17,7 @@ use crate::{
 /// making a HTTP request and then parsing the contents.
 /// If there are new Chapters, saves them to the database.
 pub async fn dispatch_gofers(
-    database: Arc<Mutex<dyn Database>>,
+    database: Arc<dyn Database>,
     targets: Vec<Target>,
 ) -> (Worker, Result<()>) {
     log!("{} Dispatching Gofers...", "[GOFR]".green());
@@ -39,7 +39,7 @@ pub async fn dispatch_gofers(
 
 /// Child process of `dispatch_gofers`.
 /// This function gets run for every thread.
-pub async fn run_gofer(database: Arc<Mutex<dyn Database>>, target: Target) -> Result<()> {
+pub async fn run_gofer(database: Arc<dyn Database>, target: Target) -> Result<()> {
     log!("{} Gofer started for {}...", "[GOFR]".green(), target.name);
     let mut chapters: Option<Vec<Chapter>> = None;
 
@@ -73,8 +73,7 @@ pub async fn run_gofer(database: Arc<Mutex<dyn Database>>, target: Target) -> Re
         let chapters_ref = &chapters.unwrap();
         let mut attempts = 5;
         while attempts > 0 {
-            let db = database.lock().await;
-            let save = db.save_chapters(chapters_ref.as_slice());
+            let save = database.save_chapters(chapters_ref.as_slice()).await;
             if save.is_ok() {
                 break;
             }
