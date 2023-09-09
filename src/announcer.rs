@@ -24,6 +24,7 @@ pub async fn dispatch_announcer(
 
     let servers = database.get_servers().await;
     if let Err(error) = servers {
+        log!("{} Announcer could not fetch servers list.", "[ANNO]".red());
         return (Worker::Announcer, Err(anyhow!(error)));
     }
     let servers = servers.unwrap();
