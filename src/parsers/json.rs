@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use json_dotpath::DotPaths;
 use serde_json::Value;
@@ -36,6 +36,20 @@ fn parse_date_unix_nanos(timestamp: i64) -> Result<DateTime<Utc>> {
     Ok(dt.into())
 }
 
+fn convert_value_into_string(value: Value) -> Result<String> {
+    if value.is_string() {
+        let the_str = value
+            .as_str()
+            .ok_or(anyhow!("Could not convert to string"))?;
+        return Ok(the_str.into());
+    } else if value.is_number() {
+        let the_number = value.as_i64().ok_or(anyhow!("Could not convert to i64"))?;
+        return Ok(the_number.to_string());
+    }
+
+    Err(anyhow!("Value isn't a valid type"))
+}
+
 pub fn parse_json(target: &Target, source: &str) -> Result<Vec<Chapter>> {
     let mut chapters: Vec<Chapter> = vec![];
     let json: Value = serde_json::from_str(source)?;
@@ -60,11 +74,11 @@ pub fn parse_json(target: &Target, source: &str) -> Result<Vec<Chapter>> {
         let mixer = |keys: &Vec<String>| -> Result<String> {
             let mut vec = vec![];
             for key in keys {
-                let the_string: Option<Value> = chapter_json.dot_get(key)?;
-                let the_string = the_string.unwrap().as_str().unwrap().to_owned();
-                if the_string.len() > 0 {
-                    vec.push(the_string);
-                }
+                let value: Value = chapter_json
+                    .dot_get(key)?
+                    .ok_or(anyhow!("Could not get value"))?;
+                let string = convert_value_into_string(value)?;
+                vec.push(string);
             }
             Ok(vec.join(" "))
         };
@@ -85,7 +99,7 @@ pub fn parse_json(target: &Target, source: &str) -> Result<Vec<Chapter>> {
         }?;
 
         let url: Value = chapter_json.dot_get(&keys.url)?.unwrap();
-        let url = url.as_str().unwrap().to_owned();
+        let url = convert_value_into_string(url)?;
 
         chapters.push(Chapter {
             manga: target.name.to_owned(),
