@@ -38,3 +38,19 @@ dateFormat = "unix"
 url = "episode.viewer_path"
 [targets.keys.skip]
 readable = false
+
+[[targets]]
+mode = "json_in_html"
+name = "Idol x Idol Story"
+source = "https://comic-fuz.com/manga/3140"
+ascendingSource = false
+baseUrl = "https://comic-fuz.com/manga/viewer/"
+[targets.tags]
+chaptersTag = "script#__NEXT_DATA__"
+[targets.keys]
+chapters = "props.pageProps.chapters.0.chapters"
+number = "chapterId"
+title = "chapterMainName"
+date = "updatedDate"
+dateFormat = "%Y/%m/%d"
+url = "chapterId"
