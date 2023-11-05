@@ -1,11 +1,11 @@
 use anyhow::{anyhow, Result};
-use chrono::{DateTime, Duration, TimeZone, Utc};
+use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use json_dotpath::DotPaths;
 use serde_json::Value;
 
 use crate::structs::{
     Chapter,
-    JsonDateTimeFormat::{Rfc2822, Rfc3339, UnixMilli, UnixNano, UnixSec},
+    JsonDateTimeFormat::{Rfc2822, Rfc3339, StringFormat, UnixMilli, UnixNano, UnixSec},
     Target,
 };
 
@@ -34,6 +34,44 @@ fn parse_date_unix_millis(timestamp: i64) -> Result<DateTime<Utc>> {
 fn parse_date_unix_nanos(timestamp: i64) -> Result<DateTime<Utc>> {
     let dt = Utc.timestamp_nanos(timestamp);
     Ok(dt.into())
+}
+
+fn parse_date_custom_format(date_string: &str, date_format: &str) -> Result<DateTime<Utc>> {
+    let has_time = date_format.contains("%H");
+
+    match has_time {
+        true => parse_date_custom_format_with_time(date_string, date_format),
+        false => parse_date_custom_format_without_time(date_string, date_format),
+    }
+}
+
+fn parse_date_custom_format_with_time(
+    date_string: &str,
+    date_format: &str,
+) -> Result<DateTime<Utc>> {
+    match NaiveDateTime::parse_from_str(date_string, date_format) {
+        Ok(naive_date) => {
+            let convert = Utc.from_local_datetime(&naive_date).unwrap();
+            Ok(convert)
+        }
+        Err(e) => Err(e.into()),
+    }
+}
+
+fn parse_date_custom_format_without_time(
+    date_string: &str,
+    date_format: &str,
+) -> Result<DateTime<Utc>> {
+    match NaiveDate::parse_from_str(date_string, date_format) {
+        Ok(naive_date) => {
+            let naive_time =
+                NaiveTime::from_hms_opt(0, 0, 0).ok_or(anyhow!("Could not create NaiveTime"))?;
+            let naive_datetime = naive_date.and_time(naive_time);
+            let convert = Utc.from_local_datetime(&naive_datetime).unwrap();
+            Ok(convert)
+        }
+        Err(e) => Err(e.into()),
+    }
 }
 
 fn convert_value_into_string(value: Value) -> Result<String> {
@@ -94,6 +132,7 @@ pub fn parse_json(target: &Target, source: &str) -> Result<Vec<Chapter>> {
                 UnixNano => parse_date_unix_nanos(date.as_i64().unwrap()),
                 Rfc2822 => parse_date_rfc2822(date.as_str().unwrap()),
                 Rfc3339 => parse_date_rfc3339(date.as_str().unwrap()),
+                StringFormat(format) => parse_date_custom_format(date.as_str().unwrap(), format),
             },
             None => parse_date_rfc3339(date.as_str().unwrap()),
         }?;

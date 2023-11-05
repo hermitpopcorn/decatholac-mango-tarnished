@@ -150,7 +150,7 @@ fn parse_keys(toml_keys: Option<&TomlValue>) -> Result<Option<TargetKeys>> {
                 "unixnano" => Some(JsonDateTimeFormat::UnixNano),
                 "rfc2822" => Some(JsonDateTimeFormat::Rfc2822),
                 "rfc3339" => Some(JsonDateTimeFormat::Rfc3339),
-                _ => None,
+                _ => Some(JsonDateTimeFormat::StringFormat(the_string)),
             },
             Err(_) => None,
         },

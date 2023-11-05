@@ -64,6 +64,7 @@ pub enum JsonDateTimeFormat {
     UnixNano,
     Rfc2822,
     Rfc3339,
+    StringFormat(String),
 }
 
 /// JSON object keys information for parsing from a JSON source.
