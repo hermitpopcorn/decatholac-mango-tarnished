@@ -106,6 +106,7 @@ pub fn get_targets(config: Option<&TomlValue>) -> Result<Vec<Target>> {
                 "rss" => ParseMode::Rss,
                 "json" => ParseMode::Json,
                 "html" => ParseMode::Html,
+                "json_in_html" => ParseMode::JsonInHtml,
                 other => bail!("Invalid mode in target: {}", other),
             },
             base_url: match config_target.get("baseUrl") {

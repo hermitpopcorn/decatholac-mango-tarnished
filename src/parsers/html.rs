@@ -8,7 +8,7 @@ use crate::structs::{Chapter, Target};
 
 use super::utils::make_link;
 
-fn make_selector(string: &str) -> Result<Selector> {
+pub(super) fn make_selector(string: &str) -> Result<Selector> {
     let selector = Selector::parse(string);
     if selector.is_err() {
         bail!("Failed creating selector: {}", string);
@@ -30,7 +30,7 @@ fn get_sub_element<'a>(element: &'a ElementRef, tag: &Option<String>) -> Result<
     }
 }
 
-fn get_value(
+pub(super) fn get_value(
     element: &ElementRef,
     tag: &Option<String>,
     attribute: &Option<String>,

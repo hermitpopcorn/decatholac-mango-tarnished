@@ -30,12 +30,13 @@ pub struct Chapter {
     pub announced_at: DateTime<Utc>,
 }
 
-/// The three supported parse modes.
+/// Supported parse modes.
 #[derive(Debug, Clone)]
 pub enum ParseMode {
     Rss,
     Json,
     Html,
+    JsonInHtml,
 }
 
 /// Each target defines a source to get manga updates from.

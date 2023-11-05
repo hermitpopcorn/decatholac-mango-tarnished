@@ -8,7 +8,9 @@ use tokio::task::JoinSet;
 use crate::{
     database::database::Database,
     log,
-    parsers::{html::parse_html, json::parse_json, rss::parse_rss},
+    parsers::{
+        html::parse_html, json::parse_json, json_in_html::parse_json_in_html, rss::parse_rss,
+    },
     structs::{Chapter, ParseMode, Target},
     Worker,
 };
@@ -103,6 +105,7 @@ async fn fetch_chapters(target: &Target) -> Result<Vec<Chapter>> {
         ParseMode::Rss => parse_rss(target, &body)?,
         ParseMode::Json => parse_json(target, &body)?,
         ParseMode::Html => parse_html(target, &body)?,
+        ParseMode::JsonInHtml => parse_json_in_html(target, &body)?,
     };
 
     Ok(chapters)
