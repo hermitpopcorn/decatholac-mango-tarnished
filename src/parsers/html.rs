@@ -74,37 +74,46 @@ pub fn parse_html(target: &Target, source: &str) -> Result<Vec<Chapter>> {
     let selector = make_selector(&tags.chapters_tag)?;
 
     for element in html.select(&selector) {
-        let number = get_value(&element, &tags.number_tag, &tags.number_attribute)?;
+        let assemble_chapter = || -> Result<Chapter> {
+            let number = get_value(&element, &tags.number_tag, &tags.number_attribute)?;
 
-        let title = get_value(&element, &tags.title_tag, &tags.title_attribute)?;
+            let title = get_value(&element, &tags.title_tag, &tags.title_attribute)?;
 
-        let get_date: Result<DateTime<Utc>> = 'setdate: {
-            if tags.date_tag.is_none() && tags.date_attribute.is_none() {
-                let now = Utc::now();
-                break 'setdate Ok(now);
-            }
+            let get_date: Result<DateTime<Utc>> = 'setdate: {
+                if tags.date_tag.is_none() && tags.date_attribute.is_none() {
+                    let now = Utc::now();
+                    break 'setdate Ok(now);
+                }
 
-            let date_string = get_value(&element, &tags.date_tag, &tags.date_attribute)?;
-            let naive_datetime = parse_string_to_datetime(&date_string, &tags.date_format)?;
+                let date_string = get_value(&element, &tags.date_tag, &tags.date_attribute)?;
+                let naive_datetime = parse_string_to_datetime(&date_string, &tags.date_format)?;
 
-            Ok(naive_datetime.and_utc())
+                Ok(naive_datetime.and_utc())
+            };
+            let date = get_date?;
+
+            let url = get_value(&element, &tags.url_tag, &tags.url_attribute)?;
+
+            Ok(Chapter {
+                manga: target.name.to_owned(),
+                number: number,
+                title: title,
+                date: date,
+                url: match &target.base_url {
+                    Some(base_url) => make_link(&base_url, &url),
+                    None => url,
+                },
+                logged_at: None,
+                announced_at: date + Duration::days(target.delay.unwrap_or(0).into()),
+            })
         };
-        let date = get_date?;
 
-        let url = get_value(&element, &tags.url_tag, &tags.url_attribute)?;
+        let chapter = assemble_chapter();
+        if chapter.is_err() {
+            continue;
+        }
 
-        chapters.push(Chapter {
-            manga: target.name.to_owned(),
-            number: number,
-            title: title,
-            date: date,
-            url: match &target.base_url {
-                Some(base_url) => make_link(&base_url, &url),
-                None => url,
-            },
-            logged_at: None,
-            announced_at: date + Duration::days(target.delay.unwrap_or(0).into()),
-        })
+        chapters.push(chapter.unwrap())
     }
 
     if !target.ascending_source {
