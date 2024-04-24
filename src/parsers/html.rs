@@ -180,6 +180,16 @@ mod test {
                                 <li data-num="50">
                                     <div class="chbox">
                                         <div class="eph-num">
+                                            <a>
+                                                <span class="chapternum">Chapter Breaker</span>
+                                                <span class="chapterdate">May 29, 2022</span>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </li>
+                                <li data-num="50">
+                                    <div class="chbox">
+                                        <div class="eph-num">
                                             <a href="https://comic-html.com/chapter/50">
                                                 <span class="chapternum">Chapter 50</span>
                                                 <span class="chapterdate">May 15, 2022</span>
