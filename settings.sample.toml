@@ -3,16 +3,18 @@ cron = "0 0 1 * * *"
 
 [[targets]]
 name = "Bokuyaba"
-source = "https://mangacross.jp/api/comics/yabai.json?type=public"
-ascendingSource = false
-mode = "json"
-baseUrl = "https://mangacross.jp"
-[targets.keys]
-chapters = "comic.episodes"
-number = "volume"
-title = ["volume", "title"]
-date = "publish_start"
-url = "page_url"
+mode = "html"
+source = "https://championcross.jp/series/899dda204c3f2/pagingList?s=2&page=0&limit=1000"
+[targets.tags]
+chaptersTag = "div.series-ep-list-item"
+urlTag = "a.article-ep-list-item-img-link"
+urlAttribute = "data-href"
+titleTag = "span.series-ep-list-item-h-text"
+numberTag = "a.article-ep-list-item-img-link"
+numberAttribute = "data-article"
+dateTag = "time.series-ep-list-date-time"
+dateAttribute = "datetime"
+dateFormat = "%Y-%m-%d %H:%M:%S"
 
 [[targets]]
 name = "Shounen wo Kau"
